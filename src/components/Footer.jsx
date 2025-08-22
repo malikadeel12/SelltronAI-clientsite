@@ -1,5 +1,6 @@
 import React from "react";
 import { FaTwitter, FaFacebook, FaLinkedin } from "react-icons/fa";
+import { Link } from "react-router-dom"; 
 import logo from "../assets/mainlogo/logoicon.png";
 
 export default function Footer() {
@@ -18,11 +19,11 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row md:items-center md:space-x-8 text-sm">
             {/* Links */}
             <ul className="flex flex-col md:flex-row md:space-x-6 text-center md:text-left">
-              <li><a href="/" className="hover:underline">Home</a></li>
-              <li><a href="#pricing" className="hover:underline">Pricing</a></li>
-              <li><a href="#dashboard" className="hover:underline">Dashboard</a></li>
-              <li><a href="#privacy" className="hover:underline">Privacy Policy</a></li>
-              <li><a href="#terms" className="hover:underline">Terms & Conditions</a></li>
+              <li><Link to="/" className="hover:underline">Home</Link></li>
+              <li><Link to="/pricingpage" className="hover:underline">Pricing</Link></li>
+              <li><Link to="#dashboard" className="hover:underline">Dashboard</Link></li>
+              <li><Link to="/aboutpage" className="hover:underline">About Us</Link></li>
+              <li><Link to="/termspage" className="hover:underline">Terms & Conditions</Link></li>
             </ul>
 
             {/* Social Icons */}

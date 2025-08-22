@@ -18,9 +18,9 @@ export default function Navbar() {
         <ul className="hidden md:flex space-x-6 text-sm">
           <li><Link to="/" className="hover:text-yellow-400">Home</Link></li>
           <li><Link to="/pricingpage" className="hover:text-yellow-400">Pricing</Link></li>
-          <li><a href="#dashboard" className="hover:text-yellow-400">Dashboard</a></li>
-          <li><a href="/aboutpage" className="hover:text-yellow-400">About Us</a></li>
-          <li><a href="/termspage" className="hover:text-yellow-400">Privacy Policy</a></li>
+          <li><Link to="#dashboard" className="hover:text-yellow-400">Dashboard</Link></li>
+          <li><Link to="/aboutpage" className="hover:text-yellow-400">About Us</Link></li>
+          <li><Link to="/termspage" className="hover:text-yellow-400">Privacy Policy</Link></li>
         </ul>
 
         {/* Desktop Button */}
@@ -46,9 +46,9 @@ export default function Navbar() {
           <ul className="flex flex-col space-y-3 p-4 text-sm">
             <li><Link to="/" className="hover:text-yellow-400">Home</Link></li>
             <li><Link to="/pricingpage" className="hover:text-yellow-400">Pricing</Link></li>
-            <li><a href="#dashboard" className="hover:text-yellow-400">Dashboard</a></li>
-            <li><a href="/aboutpage" className="hover:text-yellow-400">About Us</a></li>
-            <li><a href="/termspage" className="hover:text-yellow-400">Privacy Policy</a></li>
+            <li><Link to="#dashboard" className="hover:text-yellow-400">Dashboard</Link></li>
+            <li><Link to="/aboutpage" className="hover:text-yellow-400">About Us</Link></li>
+            <li><Link to="/termspage" className="hover:text-yellow-400">Privacy Policy</Link></li>
           </ul>
           <div className="px-4 pb-4">
             <Link
