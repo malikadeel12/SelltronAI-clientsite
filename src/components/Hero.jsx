@@ -1,5 +1,5 @@
 import React from "react";
-import heroImg from "../assets/Images/Hero.png";
+import heroImg from "../assets/images/hero.png";
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
   fontWeight: 600,

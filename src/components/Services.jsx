@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react"; 
-import service from "../assets/Images/service.png";
+import service from "../assets/images/service.png";
 
 // Font styles
 const orbitronStyle = {

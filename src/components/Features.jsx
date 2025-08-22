@@ -1,7 +1,7 @@
 import React from "react";
-import icon1 from "../assets/Icons/Icon1.png";
-import icon2 from "../assets/Icons/Icon2.png";
-import icon3 from "../assets/Icons/Icon3.png";
+import icon1 from "../assets/icons/icon1.png";
+import icon2 from "../assets/icons/icon2.png";
+import icon3 from "../assets/icons/icon3.png";
 
 // Font styles
 const orbitronStyle = {

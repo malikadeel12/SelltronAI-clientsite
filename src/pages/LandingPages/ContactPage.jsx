@@ -1,17 +1,17 @@
 import React from "react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
-import contactImg from "../../assets/Images/Image.png";
+import contactImg from "../../assets/images/image.png";
 
 // Icons for Contact Cards
-import contacticon1 from "../../assets/Icons/contacticon1.png";
-import contacticon2 from "../../assets/Icons/contacticon2.png";
-import contacticon3 from "../../assets/Icons/contacticon3.png";
+import contacticon1 from "../../assets/icons/contacticon1.png";
+import contacticon2 from "../../assets/icons/contacticon2.png";
+import contacticon3 from "../../assets/icons/contacticon3.png";
 
 // Icons for Offices
-import contacticon4 from "../../assets/Icons/contacticon4.png";
-import contacticon5 from "../../assets/Icons/contacticon5.png";
-import contacticon6 from "../../assets/Icons/contacticon6.png";
+import contacticon4 from "../../assets/icons/contacticon4.png";
+import contacticon5 from "../../assets/icons/contacticon5.png";
+import contacticon6 from "../../assets/icons/contacticon6.png";
 
 // Font styles
 const orbitronStyle = {

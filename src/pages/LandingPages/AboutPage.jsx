@@ -1,7 +1,7 @@
 import React from "react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
-import aboutImg from "../../assets/Images/aboutImage.png";
+import aboutImg from "../../assets/images/aboutImage.png";
 
 // Font styles
 const orbitronStyle = {

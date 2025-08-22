@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom"; 
-import demoImg from "../assets/Images/demo.png";
+import demoImg from "../assets/images/demo.png";
 
 // Font styles
 const orbitronStyle = {
