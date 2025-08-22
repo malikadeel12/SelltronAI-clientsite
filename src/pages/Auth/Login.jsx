@@ -1,6 +1,6 @@
 import React from "react";
 import logo from "../../assets/mainlogo/logoicon.png"; 
-
+import { Link } from "react-router-dom"; 
 // Font styles
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -80,9 +80,9 @@ export default function Login() {
         {/* Sign Up Link */}
         <p className="mt-4 text-xs sm:text-sm text-gray-600 text-center">
           Don’t have an account?{" "}
-          <a href="/signUp" className="text-purple-600 underline">
+          <Link to="/signUp" className="text-purple-600 underline">
             Sign Up
-          </a>
+          </Link>
         </p>
 
         {/* Footer */}
