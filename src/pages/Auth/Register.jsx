@@ -104,9 +104,9 @@ export default function SignUp() {
         {/* Login Link */}
         <p className="mt-4 text-xs sm:text-sm text-gray-600 text-center">
           Already have an account?{" "}
-          <a href="/login" className="text-purple-600 underline">
+          <Link to="/login" className="text-purple-600 underline">
             Log in
-          </a>
+          </Link>
         </p>
 
         {/* Footer */}
