@@ -1,6 +1,6 @@
 import React from "react";
-import logo from "../../assets/mainlogo/logoicon.png"; 
-import { Link } from "react-router-dom"; 
+import logo from "../../assets/mainlogo/logoicon.png";
+import { Link } from "react-router-dom";
 // Font styles
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -93,7 +93,7 @@ export default function SignUp() {
                 Terms of Service
               </a>{" "}
               and{" "}
-              <Link href="#" className="text-purple-600 underline">
+              <Link to="#" className="text-purple-600 underline">
                 Privacy Policy
               </Link>
               .
