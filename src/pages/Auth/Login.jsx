@@ -1,5 +1,5 @@
 import React from "react";
-import logo from "../../assets/logs/logo.png"; 
+import logo from "../../assets/mainlogo/logoicon.png"; 
 
 // Font styles
 const orbitronStyle = {
