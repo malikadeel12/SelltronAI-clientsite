@@ -12,7 +12,7 @@ export default function Footer() {
           
           {/* Logo (always left) */}
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
-            <img src={logo} alt="Logo" className="w-20 h-8 invert brightness-0" />
+            <img src={logo} alt="Logo" className="w-18 h-15" />
           </div>
 
           {/* Links + Socials (pushed to right) */}
@@ -21,7 +21,7 @@ export default function Footer() {
             <ul className="flex flex-col md:flex-row md:space-x-6 text-center md:text-left">
               <li><Link to="/" className="hover:underline">Home</Link></li>
               <li><Link to="/pricingpage" className="hover:underline">Pricing</Link></li>
-              <li><Link to="#dashboard" className="hover:underline">Dashboard</Link></li>
+              <li><Link to="/predatordashboard" className="hover:underline">Dashboard</Link></li>
               <li><Link to="/aboutpage" className="hover:underline">About Us</Link></li>
               <li><Link to="/termspage" className="hover:underline">Terms & Conditions</Link></li>
             </ul>

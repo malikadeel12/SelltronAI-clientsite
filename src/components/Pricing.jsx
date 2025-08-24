@@ -42,16 +42,7 @@ export default function Pricing() {
 
       <section id="pricing" className="px-6 py-12 bg-gray-50" style={openSansStyle}>
 
-        {/* 🔹 Buttons Above Heading */}
-        <div className="flex justify-center space-x-4 mb-6">
-          <button className="px-5 py-2 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition">
-            Contact Us
-          </button>
-          <button className="px-5 py-2 text-black flex items-center space-x-2 hover:underline">
-            <span>View All</span>
-            <span className="text-lg">{">"}</span>
-          </button>
-        </div>
+        
 
         {/* Heading */}
         <h2 

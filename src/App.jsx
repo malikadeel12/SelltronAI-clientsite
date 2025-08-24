@@ -2,11 +2,11 @@ import React from 'react'
 import { Routes, Route } from "react-router-dom";
 import Home from './pages/LandingPages/Home';
 import SignUp from "./pages/Auth/Register";
-import Login from './pages/Auth/Login';
 import PricingPage from './pages/LandingPages/PricingPage';
 import ContactPage from './pages/LandingPages/ContactPage';
 import AboutPage from './pages/LandingPages/AboutPage';
 import TermsPage from './pages/LandingPages/TermsPage';
+import PredatorDashboard from './pages/Dashboard/PredatorDashboard';
 function App() {
   return (
     <Routes>
@@ -16,10 +16,11 @@ function App() {
       <Route path="/contactpage" element={<ContactPage />} />
       <Route path="/aboutpage" element={<AboutPage />} />
       <Route path="/termspage" element={<TermsPage />} />
+      <Route path="/predatordashboard" element={<PredatorDashboard />} />
 
 
       <Route path="/signUp" element={<SignUp />} />
-      <Route path="/login" element={<Login />} />
+     
 
     </Routes>
   );

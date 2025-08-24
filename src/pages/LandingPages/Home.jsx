@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import Hero from "../../components/Hero";
 import Stats from "../../components/Stats";
@@ -17,11 +18,26 @@ export default function Home() {
       <Hero />
       <Stats />
       <Features />
+      <div className="flex justify-center space-x-3 mb-2">
+        <Link
+          to="/contactpage" 
+          className="px-5 py-2 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition"
+        >
+          Contact Us
+        </Link>
+        <Link
+          to="/all-items" // Your route
+          className="px-5 py-2 text-black flex items-center space-x-2"
+        >
+          <span>View All</span>
+          <span className="text-lg">{">"}</span>
+        </Link>
+      </div>
       <Pricing />
       <Demo />
       <WhyUs />
       <Services />
-      <CallToAction/>
+      <CallToAction />
       <Footer />
     </div>
   );

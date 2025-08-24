@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import Navbar from "../../components/Navbar";
-import Footer from "../../components/Footer"; 
+import Footer from "../../components/Footer";
 
 // Font styles
 const orbitronStyle = {
@@ -12,136 +12,225 @@ const openSansStyle = {
   fontFamily: "'Open Sans', sans-serif",
 };
 
+const sections = [
+  { id: "legal", label: "Legal Notice / Imprint" },
+  { id: "tos", label: "Terms of Service (ToS)" },
+  { id: "privacy", label: "Privacy Policy" },
+  { id: "cookies", label: "Cookie Policy" },
+  { id: "dpa", label: "Data Processing Agreement (DPA)" },
+  { id: "sla", label: "Service Level Agreement (SLA)" },
+  { id: "withdrawal", label: "Withdrawal & Refund Policy" },
+  { id: "aup", label: "Acceptable Use Policy (AUP)" },
+  { id: "export", label: "Export & International Compliance" },
+  { id: "security", label: "Security Policy" },
+  { id: "subprocessors", label: "Subprocessor List" },
+  { id: "dmca", label: "DMCA / Copyright Notice" },
+  { id: "children", label: "Children’s Privacy (COPPA / Minor Protection)" },
+  { id: "force", label: "Force Majeure" },
+  { id: "continuity", label: "Business Continuity" },
+  { id: "api", label: "API Cost Disclaimer" },
+];
+
 export default function TermsPage() {
+  const [activeSection, setActiveSection] = useState(sections[0].id);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleClick = (id) => {
+    setActiveSection(id);
+    setMobileMenuOpen(false); // close mobile menu on click
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <>
-      {/* Google Fonts import */}
       <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&family=Open+Sans:wght@400;500;600&display=swap"
         rel="stylesheet"
       />
 
       <div className="bg-gray-50 min-h-screen flex flex-col" style={openSansStyle}>
-        {/* Navbar */}
         <Navbar />
 
         {/* Heading */}
         <section className="text-center py-12 px-6">
-          <h1
-            className="text-3xl md:text-5xl font-bold text-gray-800"
-            style={orbitronStyle}
-          >
+          <h1 className="text-3xl md:text-5xl font-bold text-gray-800" style={orbitronStyle}>
             Terms & Policies
           </h1>
           <p className="text-gray-600 text-sm md:text-base mt-3">
-            Please read our terms and policies carefully before using Sell Predator
-            services.
+            Please read our terms and policies carefully before using Sell Predator services.
           </p>
         </section>
 
         {/* Subheading */}
-        <h2
-          className="text-2xl md:text-4xl font-bold text-gray-900 mb-4 ml-6 md:ml-20"
-          style={orbitronStyle}
-        >
+        <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4 px-6 md:ml-20" style={orbitronStyle}>
           General Terms of Service
         </h2>
 
-        {/* Content Section */}
-        <section className="max-w-6xl mx-auto px-4 md:px-8 grid md:grid-cols-4 gap-8 mt-6 mb-12">
-          {/* Left Sidebar */}
-          <aside className="space-y-4 font-medium">
-            <p className="text-red-600 cursor-pointer">Legal</p>
-            <p className="text-gray-800 hover:text-red-600 cursor-pointer">
-              Service Level Agreement
-            </p>
-            <p className="text-gray-800 hover:text-red-600 cursor-pointer">
-              Website Terms of Service
-            </p>
-            <p className="text-gray-800 hover:text-red-600 cursor-pointer">
-              Cookies Policy
-            </p>
-            <p className="text-gray-800 hover:text-red-600 cursor-pointer">
-              Privacy Policy
-            </p>
+        {/* Sidebar & Content */}
+        <section className="max-w-6xl mx-auto px-4 md:px-8 flex flex-col md:flex-row gap-6 mb-12">
+
+          {/* Mobile Hamburger Menu */}
+          <div className="md:hidden mb-4">
+            <button
+              className="px-4 py-2 bg-red-600 text-white rounded-lg shadow-md"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? "Close Menu" : "Open Menu"}
+            </button>
+            {mobileMenuOpen && (
+              <div className="flex flex-col mt-2 space-y-2 bg-white p-4 rounded-lg shadow-md">
+                {sections.map((sec) => (
+                  <button
+                    key={sec.id}
+                    className={`text-left px-4 py-2 rounded-lg transition-all duration-200 ${
+                      activeSection === sec.id
+                        ? "bg-red-600 text-white"
+                        : "text-gray-800 hover:text-red-600 hover:bg-gray-100"
+                    }`}
+                    onClick={() => handleClick(sec.id)}
+                  >
+                    {sec.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Sidebar */}
+          <aside className="hidden md:flex md:flex-col gap-2 md:w-64 font-medium sticky top-24">
+            {sections.map((sec) => (
+              <button
+                key={sec.id}
+                className={`cursor-pointer px-4 py-2 rounded-lg transition-all duration-200 text-left ${
+                  activeSection === sec.id
+                    ? "bg-red-600 text-white shadow-lg"
+                    : "text-gray-800 hover:text-red-600 hover:bg-gray-200"
+                }`}
+                onClick={() => handleClick(sec.id)}
+              >
+                {sec.label}
+              </button>
+            ))}
           </aside>
 
-          {/* Right Main Content */}
-          <div className="md:col-span-3 bg-white rounded-lg p-6 md:p-8">
-            <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-4">
-              Sell Predator Terms of Services were last modified on July 30, 2025.
-            </p>
+          {/* Content Section */}
+          <div className="flex-1 space-y-8">
+            {/* Legal Notice / Imprint */}
+            <div id="legal" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Legal Notice / Imprint</h2>
+              <p>Provider: Sell Predator – Milad Chakeri, Hamburg, Germany</p>
+              <p>Contact: [Insert Email Address] / [Insert Phone Number]</p>
+              <p>Authorized Representative: Milad Chakeri</p>
+              <p>VAT ID: [Insert]</p>
+              <p>Commercial Register: [Insert, if applicable]</p>
+            </div>
 
-            <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-4">
-              The following Terms of Services, together with any Additional Terms and
-              Policies (collectively “ToS”, “Terms”, “Agreement”), form the entire legal
-              agreement between you and Sell Predator in relation to your use of our
-              website (https://www.sellpredator.com all its subdomains, additional
-              top-level domains, and mobile apps) and any products, services, and
-              information provided by Sell Predator (“we”,”us”,”our”).
-            </p>
+            {/* Terms of Service (ToS) */}
+            <div id="tos" className="bg-white rounded-lg p-6 md:p-8 shadow-md space-y-2">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Terms of Service (ToS)</h2>
+              <p><strong>§1 Contracting Parties:</strong> These Terms of Service govern the contractual relationship between the provider Sell Predator (“Provider”) and the users of the SaaS service (“Customer” or “User”).</p>
+              <p><strong>§2 Description of Services:</strong> Sell Predator is an AI-powered SaaS platform that offers call transcription, real-time coaching, customer data analysis, and sales optimization. Access is granted to use these services online.</p>
+              <p><strong>§3 Prices and Payment Terms:</strong> All prices exclude VAT; payment in advance via Stripe/PayPal. Third-party API costs (OpenAI) borne by Customer.</p>
+              <p><strong>§4 Obligations of the User:</strong> No unlawful use, spam, phishing, illegal content, or IT attacks. Credentials must remain confidential.</p>
+              <p><strong>§5 Liability:</strong> Provider not liable for interruptions beyond intent/gross negligence; indirect damages excluded.</p>
+              <p><strong>§6 Term and Termination:</strong> Contracts indefinite unless agreed; 14 days’ notice; extraordinary termination rights unaffected.</p>
+              <p><strong>§7 Changes to Terms:</strong> Changes announced 30 days prior; non-objection within 14 days deemed accepted.</p>
+              <p><strong>§8 Governing Law and Jurisdiction:</strong> German law; Hamburg courts.</p>
+            </div>
 
-            <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-4">
-              Prior to purchasing a service from us, you need to ensure and declare that
-              you have read, understood and agreed to our Terms of Service (Terms of Use)
-              by checking the corresponding required checkbox.
-            </p>
+            {/* Privacy Policy */}
+            <div id="privacy" className="bg-white rounded-lg p-6 md:p-8 shadow-md space-y-2">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Privacy Policy</h2>
+              <p>Controller: Sell Predator – Milad Chakeri, Hamburg</p>
+              <p>Data Categories: Master data, Usage data, Call transcripts, Payment data</p>
+              <p>Purposes: Contract fulfillment, service improvement, IT security, payment processing</p>
+              <p>Legal Basis (GDPR): Contract performance, consent, legitimate interest</p>
+              <p>Retention: Usage data until account deletion; Payment data 10 years</p>
+              <p>Third-Party Recipients: AWS, OpenAI, Stripe, PayPal</p>
+              <p>User Rights (GDPR): Access, rectification, erasure, portability, complaint to authority</p>
+            </div>
 
-            <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-4">
-              Service purchases, client account creation, support service, affiliate
-              service, chat services are not provided to prohibited clients. Such clients
-              are defined as an entity related to some countries, regions, or individuals
-              that are prohibited by certain governments and their trade, law or economic
-              sanctions.
-            </p>
+            {/* Cookie Policy */}
+            <div id="cookies" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Cookie Policy</h2>
+              <p>Necessary cookies required for functionality. Analytics/Marketing cookies need opt-in. Users can withdraw consent anytime.</p>
+            </div>
 
-            <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-4">
-              Unless otherwise provided with explicit written permission, Sell Predator
-              also does not register and prohibits the use of any of our services in
-              connection with, any Country-Code Top Level Domain Name (“ccTLD”) for any
-              Sanctioned Country/Region.
-            </p>
+            {/* Data Processing Agreement */}
+            <div id="dpa" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Data Processing Agreement (DPA)</h2>
+              <p>Processing on Customer’s instructions only; TLS 1.2+, AES-256, ISO 27001 centers; breaches reported within 72h; subprocessors: AWS, OpenAI, Stripe, PayPal</p>
+            </div>
 
-            {/* Definition Section */}
-            <h3
-              className="text-lg md:text-xl font-semibold mt-6 mb-3"
-              style={orbitronStyle}
-            >
-              Definition of Terms you can expect in our Terms of Service
-            </h3>
-            <ul className="list-disc pl-6 text-gray-700 text-sm md:text-base space-y-2">
-              <li>
-                “us”, “we”, “our”, “Sell Predator”, “Sell Predator” or “the Company” are
-                used instead of Sell Predator – the owner of this Website and the offered
-                in it services.
-              </li>
-              <li>
-                “visitor” – is a person or a robot that is browsing our website while not
-                being registered as an official “customer” of our services.
-              </li>
-              <li>
-                “Member”, “Customer” – a person who has registered on our website,
-                respectively is using or used our “service”.
-              </li>
-              <li>
-                “User” – Collective term used to describe a visitor to our website or a
-                member of our services.
-              </li>
-              <li>
-                “Service” – functionality, web hosting product or an additional service
-                that is serving the purpose of the Web Hosting and Domain Hosting
-                technology.
-              </li>
-              <li>
-                “Content” – The term can be used to describe a static resource such as,
-                but not limited to, text, information, graphics, audio, video, AI,
-                Software and any form of data.
-              </li>
-            </ul>
+            {/* Service Level Agreement */}
+            <div id="sla" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Service Level Agreement (SLA)</h2>
+              <p>Uptime: 99%, support response 24h, maintenance announced 48h prior. No liability for third-party outages.</p>
+            </div>
+
+            {/* Withdrawal & Refund Policy */}
+            <div id="withdrawal" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Withdrawal & Refund Policy</h2>
+              <p>B2C: 14-day withdrawal; B2B: excluded; refunds only if legally required or at Provider’s discretion.</p>
+            </div>
+
+            {/* Acceptable Use Policy */}
+            <div id="aup" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Acceptable Use Policy (AUP)</h2>
+              <p>Lawful use only. Prohibited: spam, phishing, illegal content, hacking, API abuse.</p>
+            </div>
+
+            {/* Export & International Compliance */}
+            <div id="export" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Export & International Compliance</h2>
+              <p>Use restricted in sanctioned countries (e.g., North Korea, Syria). User responsible for compliance. Provider not liable for violations.</p>
+            </div>
+
+            {/* Security Policy */}
+            <div id="security" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Security Policy</h2>
+              <p>TLS 1.2+, AES-256, ISO 27001 data centers, daily backups, monitoring, multi-region hosting.</p>
+            </div>
+
+            {/* Subprocessor List */}
+            <div id="subprocessors" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Subprocessor List</h2>
+              <p>AWS: Hosting, OpenAI: AI processing, Stripe/PayPal: payments. Provider may add subprocessors with notice.</p>
+            </div>
+
+            {/* DMCA */}
+            <div id="dmca" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>DMCA / Copyright Notice</h2>
+              <p>Users responsible for content; infringing content removed promptly; DMCA applies for U.S. customers.</p>
+            </div>
+
+            {/* Children’s Privacy */}
+            <div id="children" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Children’s Privacy (COPPA / Minor Protection)</h2>
+              <p>Service for 18+ only; no data collection from minors under 16; data deleted if found.</p>
+            </div>
+
+            {/* Force Majeure */}
+            <div id="force" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Force Majeure</h2>
+              <p>Provider not liable for events outside reasonable control: war, disasters, pandemics, power/telecom failure, government actions.</p>
+            </div>
+
+            {/* Business Continuity */}
+            <div id="continuity" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Business Continuity</h2>
+              <p>Backups, disaster recovery, multi-region hosting, rapid service restoration.</p>
+            </div>
+
+            {/* API Cost Disclaimer */}
+            <div id="api" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+              <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>API Cost Disclaimer</h2>
+              <p>Third-party API costs (OpenAI, Google, AWS) are Customer’s responsibility. Provider not liable for unpaid restrictions.</p>
+            </div>
+
           </div>
         </section>
 
-        {/* Footer */}
         <Footer />
       </div>
     </>
