@@ -11,9 +11,9 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto w-full">
           
           {/* Logo (always left) */}
-          <div className="flex items-center space-x-2 mb-4 md:mb-0">
+          <Link to="/" className="flex items-center space-x-2 mb-4 md:mb-0">
             <img src={logo} alt="Logo" className="w-16 h-12 sm:w-18 sm:h-14 md:w-20 md:h-15" />
-          </div>
+          </Link>
 
           {/* Links + Socials (pushed to right) */}
           <div className="flex flex-col md:flex-row md:items-center md:space-x-8 text-sm w-full md:w-auto">

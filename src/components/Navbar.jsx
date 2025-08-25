@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Menu, X } from "lucide-react"; 
+import { Menu, X } from "lucide-react";
 import logo from "../assets/mainlogo/logoicon.png";
-import { Link } from "react-router-dom"; 
+import { Link } from "react-router-dom";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -10,9 +10,9 @@ export default function Navbar() {
     <nav className="w-full bg-[#000000] text-[#f5f5f5] px-4 sm:px-6 py-4 relative">
       <div className="flex items-center justify-between max-w-6xl mx-auto">
         {/* Logo */}
-        <div className="flex items-center space-x-2">
+        <Link to="/" className="flex items-center space-x-2 cursor-pointer">
           <img src={logo} alt="Logo" className="w-16 sm:w-20 h-auto" />
-        </div>
+        </Link>
 
         {/* Desktop Links */}
         <ul className="hidden md:flex space-x-6 text-sm md:text-base">
