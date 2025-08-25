@@ -23,7 +23,7 @@ export default function PricingPage() {
         rel="stylesheet"
       />
 
-      <div className="bg-gray-50 min-h-screen flex flex-col" style={openSansStyle}>
+      <div className="bg-[#f5f5f5] min-h-screen flex flex-col" style={openSansStyle}>
         {/* Navbar */}
         <Navbar />
 
@@ -36,7 +36,7 @@ export default function PricingPage() {
             Transparent Pricing for Exceptional Value
           </h1>
           <p
-            className="text-gray-600 text-sm sm:text-base md:text-lg max-w-2xl mx-auto px-2"
+            className="text-[#000000] text-sm sm:text-base md:text-lg max-w-2xl mx-auto px-2"
             style={openSansStyle}
           >
             Find the perfect plan for your needs with our straightforward pricing

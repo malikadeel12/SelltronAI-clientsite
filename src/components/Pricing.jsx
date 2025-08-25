@@ -40,51 +40,43 @@ export default function Pricing() {
         rel="stylesheet"
       />
 
-      <section id="pricing" className="px-6 py-12 bg-gray-50" style={openSansStyle}>
-
-        
-
+      <section id="pricing" className="px-4 sm:px-6 md:px-6 py-10 md:py-12 bg-[#F5F5F5]" style={openSansStyle}>
         {/* Heading */}
-        <h2 
-          className="text-2xl md:text-3xl font-bold text-center mb-4"
-          style={orbitronStyle}
-        >
+        <h2 className="text-2xl sm:text-3xl md:text-3xl font-bold text-center mb-4" style={orbitronStyle}>
           Plans & Pricing
         </h2>
-        <p className="text-gray-600 text-sm md:text-base text-center mb-8" style={openSansStyle}>
+        <p className="text-[#000000] text-sm sm:text-base md:text-base text-center mb-8" style={openSansStyle}>
           Whether your automation needs are small or large, we’re here to help you scale.
         </p>
 
-        {/* 🔹 Single Card Container */}
-        <div className="bg-white rounded-lg p-6 md:p-8 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+        {/* Plans Container */}
+        <div className="bg-[#ffffff] rounded-lg p-4 sm:p-6 md:p-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 md:gap-6 text-center">
             {plans.map((plan, i) => (
-              <div 
-                key={i} 
-                className="relative flex flex-col items-center px-4 py-6 h-full"
-              >
-                <h3 className="text-lg md:text-xl font-semibold" style={orbitronStyle}>
+              <div key={i} className="relative flex flex-col items-center px-2 sm:px-4 md:px-6 py-6 h-full">
+                {/* Title */}
+                <h3 className="text-lg sm:text-xl md:text-xl font-semibold" style={orbitronStyle}>
                   {plan.title}
                 </h3>
-                <p className="text-xl md:text-2xl font-bold mt-2" style={orbitronStyle}>
-                  {plan.price}
-                  <span className="text-sm" style={openSansStyle}>/month</span>
+
+                {/* Price */}
+                <p className="text-xl sm:text-2xl md:text-2xl font-bold mt-2" style={orbitronStyle}>
+                  {plan.price} <span className="text-sm sm:text-base" style={openSansStyle}>/month</span>
                 </p>
-                <p className="text-gray-500 text-xs md:text-sm mt-1" style={openSansStyle}>
+
+                {/* Description */}
+                <p className="text-[#000000] text-xs sm:text-sm md:text-sm mt-1" style={openSansStyle}>
                   {plan.text}
                 </p>
 
                 {/* Features */}
-                <ul className="mt-4 text-gray-700 space-y-2 text-left w-full max-w-[220px] mx-auto" style={openSansStyle}>
+                <ul className="mt-4 text-[#000000] space-y-2 text-left w-full max-w-[220px] mx-auto" style={openSansStyle}>
                   {plan.features.map((f, idx) => (
-                    <li 
-                      key={idx} 
-                      className="flex items-center space-x-2"
-                    >
+                    <li key={idx} className="flex items-center space-x-2">
                       <span className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-200 text-purple text-xs">
                         ✓
                       </span>
-                      <span className="text-sm md:text-base">{f}</span>
+                      <span className="text-sm sm:text-base">{f}</span>
                     </li>
                   ))}
                 </ul>
@@ -92,10 +84,14 @@ export default function Pricing() {
                 {/* Spacer */}
                 <div className="flex-grow"></div>
 
-                {/* Equal Sized Button */}
-                <button className="mt-6 w-full max-w-[200px] px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700" style={openSansStyle}>
+                {/* Choose Plan Button */}
+                <a
+                  href="/signup"
+                  className="mt-6 w-full max-w-[200px] px-6 py-2 bg-[#D72638] text-[#f5f5f5] rounded-full hover:bg-red-700"
+                  style={openSansStyle}
+                >
                   Choose Plan
-                </button>
+                </a>
 
                 {/* Divider for Desktop */}
                 {i < plans.length - 1 && (
@@ -106,7 +102,7 @@ export default function Pricing() {
           </div>
 
           {/* Note Text */}
-          <p className="text-xs text-gray-500 mt-6 text-center" style={openSansStyle}>
+          <p className="text-xs sm:text-sm md:text-sm text-[#000000] mt-6 text-center" style={openSansStyle}>
             License cost: €349.90 (charged after the 7-day trial period).
           </p>
         </div>

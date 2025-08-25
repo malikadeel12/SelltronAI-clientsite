@@ -48,21 +48,21 @@ export default function TermsPage() {
         rel="stylesheet"
       />
 
-      <div className="bg-gray-50 min-h-screen flex flex-col" style={openSansStyle}>
+      <div className="bg-[#f5f5f5] min-h-screen flex flex-col" style={openSansStyle}>
         <Navbar />
 
         {/* Heading */}
         <section className="text-center py-12 px-6">
-          <h1 className="text-3xl md:text-5xl font-bold text-gray-800" style={orbitronStyle}>
+          <h1 className="text-3xl md:text-5xl font-bold text-[#000000]" style={orbitronStyle}>
             Terms & Policies
           </h1>
-          <p className="text-gray-600 text-sm md:text-base mt-3">
+          <p className="text-[#000000] text-sm md:text-base mt-3">
             Please read our terms and policies carefully before using Sell Predator services.
           </p>
         </section>
 
         {/* Subheading */}
-        <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4 px-6 md:ml-20" style={orbitronStyle}>
+        <h2 className="text-2xl md:text-4xl font-bold text-[#000000] mb-4 px-6 md:ml-20" style={orbitronStyle}>
           General Terms of Service
         </h2>
 
@@ -72,20 +72,20 @@ export default function TermsPage() {
           {/* Mobile Hamburger Menu */}
           <div className="md:hidden mb-4">
             <button
-              className="px-4 py-2 bg-red-600 text-white rounded-lg shadow-md"
+              className="px-4 py-2 bg-[#D72638] text-[#f5f5f5] rounded-lg shadow-md"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? "Close Menu" : "Open Menu"}
             </button>
             {mobileMenuOpen && (
-              <div className="flex flex-col mt-2 space-y-2 bg-white p-4 rounded-lg shadow-md">
+              <div className="flex flex-col mt-2 space-y-2 bg-[#f5f5f5] p-4 rounded-lg shadow-md">
                 {sections.map((sec) => (
                   <button
                     key={sec.id}
                     className={`text-left px-4 py-2 rounded-lg transition-all duration-200 ${
                       activeSection === sec.id
-                        ? "bg-red-600 text-white"
-                        : "text-gray-800 hover:text-red-600 hover:bg-gray-100"
+                        ? "bg-[#D72638] text-[#f5f5f5]"
+                        : "text-[#000000] hover:text-[#D72638] hover:bg-[#f5f5f5]"
                     }`}
                     onClick={() => handleClick(sec.id)}
                   >
@@ -103,8 +103,8 @@ export default function TermsPage() {
                 key={sec.id}
                 className={`cursor-pointer px-4 py-2 rounded-lg transition-all duration-200 text-left ${
                   activeSection === sec.id
-                    ? "bg-red-600 text-white shadow-lg"
-                    : "text-gray-800 hover:text-red-600 hover:bg-gray-200"
+                    ? "bg-[#D72638] text-[#f5f5f5] shadow-lg"
+                    : "text-[#000000] hover:text-[#D72638] hover:bg-[#f5f5f5]"
                 }`}
                 onClick={() => handleClick(sec.id)}
               >
@@ -116,7 +116,7 @@ export default function TermsPage() {
           {/* Content Section */}
           <div className="flex-1 space-y-8">
             {/* Legal Notice / Imprint */}
-            <div id="legal" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="legal" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Legal Notice / Imprint</h2>
               <p>Provider: Sell Predator – Milad Chakeri, Hamburg, Germany</p>
               <p>Contact: [Insert Email Address] / [Insert Phone Number]</p>
@@ -126,7 +126,7 @@ export default function TermsPage() {
             </div>
 
             {/* Terms of Service (ToS) */}
-            <div id="tos" className="bg-white rounded-lg p-6 md:p-8 shadow-md space-y-2">
+            <div id="tos" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md space-y-2">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Terms of Service (ToS)</h2>
               <p><strong>§1 Contracting Parties:</strong> These Terms of Service govern the contractual relationship between the provider Sell Predator (“Provider”) and the users of the SaaS service (“Customer” or “User”).</p>
               <p><strong>§2 Description of Services:</strong> Sell Predator is an AI-powered SaaS platform that offers call transcription, real-time coaching, customer data analysis, and sales optimization. Access is granted to use these services online.</p>
@@ -139,7 +139,7 @@ export default function TermsPage() {
             </div>
 
             {/* Privacy Policy */}
-            <div id="privacy" className="bg-white rounded-lg p-6 md:p-8 shadow-md space-y-2">
+            <div id="privacy" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md space-y-2">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Privacy Policy</h2>
               <p>Controller: Sell Predator – Milad Chakeri, Hamburg</p>
               <p>Data Categories: Master data, Usage data, Call transcripts, Payment data</p>
@@ -151,79 +151,79 @@ export default function TermsPage() {
             </div>
 
             {/* Cookie Policy */}
-            <div id="cookies" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="cookies" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Cookie Policy</h2>
               <p>Necessary cookies required for functionality. Analytics/Marketing cookies need opt-in. Users can withdraw consent anytime.</p>
             </div>
 
             {/* Data Processing Agreement */}
-            <div id="dpa" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="dpa" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Data Processing Agreement (DPA)</h2>
               <p>Processing on Customer’s instructions only; TLS 1.2+, AES-256, ISO 27001 centers; breaches reported within 72h; subprocessors: AWS, OpenAI, Stripe, PayPal</p>
             </div>
 
             {/* Service Level Agreement */}
-            <div id="sla" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="sla" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Service Level Agreement (SLA)</h2>
               <p>Uptime: 99%, support response 24h, maintenance announced 48h prior. No liability for third-party outages.</p>
             </div>
 
             {/* Withdrawal & Refund Policy */}
-            <div id="withdrawal" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="withdrawal" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Withdrawal & Refund Policy</h2>
               <p>B2C: 14-day withdrawal; B2B: excluded; refunds only if legally required or at Provider’s discretion.</p>
             </div>
 
             {/* Acceptable Use Policy */}
-            <div id="aup" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="aup" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Acceptable Use Policy (AUP)</h2>
               <p>Lawful use only. Prohibited: spam, phishing, illegal content, hacking, API abuse.</p>
             </div>
 
             {/* Export & International Compliance */}
-            <div id="export" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="export" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Export & International Compliance</h2>
               <p>Use restricted in sanctioned countries (e.g., North Korea, Syria). User responsible for compliance. Provider not liable for violations.</p>
             </div>
 
             {/* Security Policy */}
-            <div id="security" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="security" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Security Policy</h2>
               <p>TLS 1.2+, AES-256, ISO 27001 data centers, daily backups, monitoring, multi-region hosting.</p>
             </div>
 
             {/* Subprocessor List */}
-            <div id="subprocessors" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="subprocessors" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Subprocessor List</h2>
               <p>AWS: Hosting, OpenAI: AI processing, Stripe/PayPal: payments. Provider may add subprocessors with notice.</p>
             </div>
 
             {/* DMCA */}
-            <div id="dmca" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="dmca" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>DMCA / Copyright Notice</h2>
               <p>Users responsible for content; infringing content removed promptly; DMCA applies for U.S. customers.</p>
             </div>
 
             {/* Children’s Privacy */}
-            <div id="children" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="children" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Children’s Privacy (COPPA / Minor Protection)</h2>
               <p>Service for 18+ only; no data collection from minors under 16; data deleted if found.</p>
             </div>
 
             {/* Force Majeure */}
-            <div id="force" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="force" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Force Majeure</h2>
               <p>Provider not liable for events outside reasonable control: war, disasters, pandemics, power/telecom failure, government actions.</p>
             </div>
 
             {/* Business Continuity */}
-            <div id="continuity" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="continuity" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>Business Continuity</h2>
               <p>Backups, disaster recovery, multi-region hosting, rapid service restoration.</p>
             </div>
 
             {/* API Cost Disclaimer */}
-            <div id="api" className="bg-white rounded-lg p-6 md:p-8 shadow-md">
+            <div id="api" className="bg-[#f5f5f5] rounded-lg p-6 md:p-8 shadow-md">
               <h2 className="text-xl md:text-2xl font-semibold mb-2" style={orbitronStyle}>API Cost Disclaimer</h2>
               <p>Third-party API costs (OpenAI, Google, AWS) are Customer’s responsibility. Provider not liable for unpaid restrictions.</p>
             </div>

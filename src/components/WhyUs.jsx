@@ -1,8 +1,8 @@
 import React from "react";
-import icon4 from "../assets/icons/icon4.png";
-import icon5 from "../assets/icons/icon5.png";
-import icon6 from "../assets/icons/icon6.png";
-import icon7 from "../assets/icons/icon7.png";
+import icon4 from "../assets/icons/icons4.png.svg";
+import icon5 from "../assets/icons/icons5.png.svg";
+import icon6 from "../assets/icons/icons6.png.svg";
+import icon7 from "../assets/icons/icons7.png.svg";
 
 // Font styles
 const orbitronStyle = {
@@ -31,12 +31,12 @@ export default function WhyUs() {
       />
 
       <section 
-        className="px-6 py-12 bg-gray-50 text-center"
+        className="px-4 sm:px-6 md:px-6 py-10 md:py-12 bg-[#f5f5f5] text-center"
         style={openSansStyle}
       >
         {/* 🔹 Top Label */}
         <div 
-          className="bg-yellow-200 text-black text-sm font-medium px-4 py-1 rounded-full w-fit mx-auto mb-6"
+          className="bg-[#FFD700] text-[#000000] text-sm sm:text-base font-medium px-4 py-1 rounded-full w-fit mx-auto mb-6"
           style={openSansStyle}
         >
           Why Us
@@ -44,31 +44,31 @@ export default function WhyUs() {
 
         {/* Heading + Subtext */}
         <h2 
-          className="text-2xl md:text-3xl font-bold mb-4"
+          className="text-2xl sm:text-3xl md:text-3xl font-bold mb-4"
           style={orbitronStyle}
         >
           Why Teams Choose Sell Predator
         </h2>
         <p 
-          className="text-gray-600 mb-8 text-sm md:text-base"
+          className="text-[#000000] mb-8 text-sm sm:text-base md:text-base"
           style={openSansStyle}
         >
           Four key reasons sales and support teams choose our AI platform.
         </p>
 
         {/* 🔹 Single Card Container */}
-        <div className="bg-white shadow-md rounded-lg p-6 md:p-8 max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div className="bg-[#ffffff] shadow-md rounded-lg p-6 md:p-8 max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-center">
           {points.map((p, i) => (
-            <div key={i} className="flex flex-col items-center">
+            <div key={i} className="flex flex-col items-center px-2 sm:px-4">
               {/* Icon */}
               <img
                 src={p.icon}
                 alt={p.text}
-                className="w-12 h-12 mb-4"
+                className="w-10 sm:w-12 h-10 sm:h-12 mb-4"
               />
               {/* Text */}
               <p 
-                className="font-semibold text-sm md:text-base"
+                className="font-semibold text-sm sm:text-base md:text-base"
                 style={openSansStyle}
               >
                 {p.text}

@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 
 // Font styles
 const orbitronStyle = {
@@ -29,7 +28,7 @@ export default function CallToAction() {
       >
         {/* Text */}
         <p
-          className="text-white text-base sm:text-lg md:text-xl max-w-3xl mx-auto mb-10 leading-relaxed"
+          className="text-[#f5f5f5] text-base sm:text-lg md:text-xl max-w-3xl mx-auto mb-10 leading-relaxed"
           style={openSansStyle}
         >
           Sell Predator provides powerful tools and continuous improvements.{" "}
@@ -41,22 +40,22 @@ export default function CallToAction() {
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
           {/* Sign Up (transparent) */}
-          <Link
-            to="/signUp"
-            className="px-6 py-2 border border-white text-white rounded-full hover:bg-white hover:text-black transition w-full sm:w-auto text-center"
+          <a
+            href="/signUp"
+            className="px-6 py-2 border border-[#f5f5f5] text-[#f5f5f5] rounded-full hover:bg-[#f5f5f5] hover:text-[#000000] transition w-full sm:w-auto text-center"
             style={orbitronStyle}
           >
             Sign Up
-          </Link>
+          </a>
 
           {/* Contact Us (yellow bg) */}
-          <Link
-            to="/contactpage"
-            className="px-6 py-2 bg-yellow-400 text-black rounded-full hover:bg-yellow-500 transition w-full sm:w-auto text-center"
+          <a
+            href="/contactpage"
+            className="px-6 py-2 bg-[#FFD700] text-[#000000] rounded-full hover:bg-[#FFD700] transition w-full sm:w-auto text-center"
             style={orbitronStyle}
           >
             Contact Us
-          </Link>
+          </a>
         </div>
       </section>
     </>

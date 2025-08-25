@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import Hero from "../../components/Hero";
 import Stats from "../../components/Stats";
@@ -13,25 +12,25 @@ import Footer from "../../components/Footer";
 
 export default function Home() {
   return (
-    <div className="bg-white text-gray-800">
+    <div className="bg-[#f5f5f5] text-[#000000]">
       <Navbar />
       <Hero />
       <Stats />
       <Features />
-      <div className="flex justify-center space-x-3 mb-2">
-        <Link
-          to="/contactpage" 
-          className="px-5 py-2 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition"
+      <div className="flex justify-center space-x-3 mb-4">
+        <a
+          href="/contactpage" 
+          className="px-5 py-2 bg-[#FFD700] text-[#f5f5f5] rounded-full hover:bg-[#FFD700] transition"
         >
           Contact Us
-        </Link>
-        <Link
-          to="/all-items" // Your route
-          className="px-5 py-2 text-black flex items-center space-x-2"
+        </a>
+        <a
+          href="/pricingpage" 
+          className="px-5 py-2 text-[#000000] flex items-center space-x-2"
         >
           <span>View All</span>
           <span className="text-lg">{">"}</span>
-        </Link>
+        </a>
       </div>
       <Pricing />
       <Demo />

@@ -6,7 +6,9 @@ import PricingPage from './pages/LandingPages/PricingPage';
 import ContactPage from './pages/LandingPages/ContactPage';
 import AboutPage from './pages/LandingPages/AboutPage';
 import TermsPage from './pages/LandingPages/TermsPage';
-import PredatorDashboard from './pages/Dashboard/PredatorDashboard';
+import PredatorDashboard from './pages/Cockpit/PredatorDashboard';
+import AdminDashboard from './pages/Dashboard/AdminDashboard';
+import AdminUsers from './pages/Dashboard/AdminUsers';
 function App() {
   return (
     <Routes>
@@ -17,6 +19,9 @@ function App() {
       <Route path="/aboutpage" element={<AboutPage />} />
       <Route path="/termspage" element={<TermsPage />} />
       <Route path="/predatordashboard" element={<PredatorDashboard />} />
+      <Route path="/AdminDashboard" element={<AdminDashboard />} />
+      <Route path="/AdminUsers" element={<AdminUsers />} />
+
 
 
       <Route path="/signUp" element={<SignUp />} />

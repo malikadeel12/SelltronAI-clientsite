@@ -1,17 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import contactImg from "../../assets/images/image.png";
 
 // Icons for Contact Cards
-import contacticon1 from "../../assets/icons/contacticon1.png";
-import contacticon2 from "../../assets/icons/contacticon2.png";
-import contacticon3 from "../../assets/icons/contacticon3.png";
+import contacticon1 from "../../assets/icons/contacticons1.png.svg";
+import contacticon2 from "../../assets/icons/contacticons2.png.svg";
+import contacticon3 from "../../assets/icons/contacticons3.png.svg";
 
 // Icons for Offices
-import contacticon4 from "../../assets/icons/contacticon4.png";
-import contacticon5 from "../../assets/icons/contacticon5.png";
-import contacticon6 from "../../assets/icons/contacticon6.png";
+import contacticon4 from "../../assets/icons/contacticons4.png.svg";
+import contacticon5 from "../../assets/icons/contacticons5.png.svg";
+import contacticon6 from "../../assets/icons/contacticons6.png.svg";
 
 // Font styles
 const orbitronStyle = {
@@ -24,15 +24,29 @@ const openSansStyle = {
 };
 
 export default function ContactPage() {
+  const [showPopup, setShowPopup] = useState(false);
+  const [fadeIn, setFadeIn] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault(); 
+    setShowPopup(true);
+    setFadeIn(true);
+
+    setTimeout(() => {
+      setFadeIn(false); 
+      setTimeout(() => setShowPopup(false), 500);
+    }, 2000);
+  };
+
   return (
     <>
-      {/* Google Fonts import */}
+      {/* Google Fonts */}
       <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&family=Open+Sans:wght@400;500;600&display=swap"
         rel="stylesheet"
       />
 
-      <div className="bg-gray-50 min-h-screen flex flex-col" style={openSansStyle}>
+      <div className="bg-[#f5f5f5] min-h-screen flex flex-col" style={openSansStyle}>
         {/* Navbar */}
         <Navbar />
 
@@ -44,7 +58,7 @@ export default function ContactPage() {
           >
             Get in Touch with Sell Predator
           </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
+          <p className="text-[#000000] max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
             Have a question or need support? Fill in the form below and our team
             will get back to you shortly.
           </p>
@@ -54,30 +68,15 @@ export default function ContactPage() {
         <section className="max-w-6xl w-full mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 items-stretch">
           {/* Left: Form */}
           <form
-            className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-4 flex flex-col w-full"
+            onSubmit={handleSubmit}
+            className="bg-[#f5f5f5] rounded-lg shadow-md p-4 sm:p-6 space-y-4 flex flex-col w-full"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <input
-                type="text"
-                placeholder="First Name"
-                className="border rounded-md p-3 w-full text-sm sm:text-base"
-              />
-              <input
-                type="text"
-                placeholder="Last Name"
-                className="border rounded-md p-3 w-full text-sm sm:text-base"
-              />
+              <input type="text" placeholder="First Name" className="border rounded-md p-3 w-full text-sm sm:text-base" />
+              <input type="text" placeholder="Last Name" className="border rounded-md p-3 w-full text-sm sm:text-base" />
             </div>
-            <input
-              type="email"
-              placeholder="Email"
-              className="border rounded-md p-3 w-full text-sm sm:text-base"
-            />
-            <input
-              type="text"
-              placeholder="Subject: Question about pricing"
-              className="border rounded-md p-3 w-full text-sm sm:text-base"
-            />
+            <input type="email" placeholder="Email" className="border rounded-md p-3 w-full text-sm sm:text-base" />
+            <input type="text" placeholder="Subject: Question about pricing" className="border rounded-md p-3 w-full text-sm sm:text-base" />
 
             {/* Services Tags */}
             <div className="flex flex-wrap gap-2">
@@ -89,7 +88,7 @@ export default function ContactPage() {
               ].map((tag, i) => (
                 <span
                   key={i}
-                  className="bg-gray-100 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-full cursor-pointer hover:bg-yellow-200"
+                  className="bg-[#f5f5f5] text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-full cursor-pointer hover:bg-yellow-200"
                 >
                   {tag}
                 </span>
@@ -97,24 +96,18 @@ export default function ContactPage() {
             </div>
 
             {/* Message */}
-            <textarea
-              rows="4"
-              placeholder="Add Text"
-              className="border rounded-md p-3 w-full text-sm sm:text-base"
-            ></textarea>
+            <textarea rows="4" placeholder="Add Text" className="border rounded-md p-3 w-full text-sm sm:text-base"></textarea>
 
             {/* Checkbox */}
             <div className="flex items-center space-x-2 text-xs sm:text-sm">
               <input type="checkbox" id="terms" />
-              <label htmlFor="terms">
-                I agree to the Terms of Service and Privacy Policy.
-              </label>
+              <label htmlFor="terms">I agree to the Terms of Service and Privacy Policy.</label>
             </div>
 
             {/* Send Button */}
             <button
               type="submit"
-              className="bg-yellow-400 text-black px-4 sm:px-6 py-2 rounded-full hover:bg-yellow-500 text-sm sm:text-base"
+              className="bg-[#FFD700] cursor-pointer text-[#000000] px-4 sm:px-6 py-2 rounded-full hover:bg-[#FFD700] text-sm sm:text-base"
             >
               Send Message
             </button>
@@ -122,54 +115,27 @@ export default function ContactPage() {
 
           {/* Right: Illustration */}
           <div className="flex justify-center items-center w-full">
-            <img
-              src={contactImg}
-              alt="Contact"
-              className="w-full h-full object-contain max-w-sm sm:max-w-md"
-            />
+            <img src={contactImg} alt="Contact" className="w-full h-full object-contain max-w-sm sm:max-w-md" />
           </div>
         </section>
 
         {/* Contact Cards */}
         <section className="max-w-4xl w-full mx-auto px-4 sm:px-6 mt-8 sm:mt-10">
-          <div className="bg-white shadow-md rounded-lg flex flex-col md:flex-row text-center w-full overflow-hidden">
+          <div className="bg-[#f5f5f5] shadow-md rounded-lg flex flex-col md:flex-row text-center w-full overflow-hidden">
             {[
-              {
-                icon: contacticon1,
-                title: "Sales and Business",
-                email: "sales@sellpredator.com",
-              },
-              {
-                icon: contacticon2,
-                title: "Partners",
-                email: "partners@sellpredator.com",
-              },
-              {
-                icon: contacticon3,
-                title: "Customer Support",
-                email: "support@sellpredator.com",
-              },
+              { icon: contacticon1, title: "Sales and Business", email: "sales@sellpredator.com" },
+              { icon: contacticon2, title: "Partners", email: "partners@sellpredator.com" },
+              { icon: contacticon3, title: "Customer Support", email: "support@sellpredator.com" },
             ].map((c, i) => (
               <div
                 key={i}
                 className={`flex-1 p-4 sm:p-6 flex flex-col items-center ${
-                  i < 2 ? "border-b md:border-b-0 md:border-r border-gray-200" : ""
+                  i < 2 ? "border-b md:border-b-0 md:border-r border-[#f5f5f5]" : ""
                 }`}
               >
-                <img
-                  src={c.icon}
-                  alt={c.title}
-                  className="w-8 h-8 sm:w-10 sm:h-10 mb-2 sm:mb-3"
-                />
-                <h3
-                  className="font-semibold text-sm sm:text-base"
-                  style={orbitronStyle}
-                >
-                  {c.title}
-                </h3>
-                <p className="text-gray-600 text-xs sm:text-sm mt-1 sm:mt-2">
-                  {c.email}
-                </p>
+                <img src={c.icon} alt={c.title} className="w-8 h-8 sm:w-10 sm:h-10 mb-2 sm:mb-3" />
+                <h3 className="font-semibold text-sm sm:text-base" style={orbitronStyle}>{c.title}</h3>
+                <p className="text-[#000000] text-xs sm:text-sm mt-1 sm:mt-2">{c.email}</p>
               </div>
             ))}
           </div>
@@ -178,57 +144,39 @@ export default function ContactPage() {
         {/* Offices Section */}
         <section className="text-center py-10 sm:py-12 px-4 sm:px-6">
           <p className="text-purple-600 text-xs sm:text-sm mb-2">Our Offices</p>
-          <h2
-            className="text-lg sm:text-2xl md:text-3xl font-bold mb-4"
-            style={orbitronStyle}
-          >
+          <h2 className="text-lg sm:text-2xl md:text-3xl font-bold mb-4" style={orbitronStyle}>
             Connect With Sell Predator – Wherever You Are
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
-            Our AI platform is available worldwide. Reach out to our team through
-            our main contact points.
+          <p className="text-[#000000] max-w-2xl mx-auto text-xs sm:text-sm md:text-base">
+            Our AI platform is available worldwide. Reach out to our team through our main contact points.
           </p>
 
           {/* Offices Grid */}
-          <div className="bg-white shadow-md rounded-lg max-w-6xl w-full mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 text-center p-6 sm:p-8 mt-6 sm:mt-8 gap-6">
+          <div className="bg-[#f5f5f5] shadow-md rounded-lg max-w-6xl w-full mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 text-center p-6 sm:p-8 mt-6 sm:mt-8 gap-6">
             {[
-              {
-                icon: contacticon4,
-                title: "Global Support",
-                email: "support@sellpredator.com",
-                phone: "+XX-XXXXX-XXXXX",
-              },
-              {
-                icon: contacticon5,
-                title: "Sales & Partnerships",
-                email: "sales@sellpredator.com",
-                phone: "+XX-XXXXX-XXXXX",
-              },
-              {
-                icon: contacticon6,
-                title: "Technical Support",
-                email: "tech@sellpredator.com",
-                phone: "+XX-XXXXX-XXXXX",
-              },
+              { icon: contacticon4, title: "Global Support", email: "support@sellpredator.com", phone: "+XX-XXXXX-XXXXX" },
+              { icon: contacticon5, title: "Sales & Partnerships", email: "sales@sellpredator.com", phone: "+XX-XXXXX-XXXXX" },
+              { icon: contacticon6, title: "Technical Support", email: "tech@sellpredator.com", phone: "+XX-XXXXX-XXXXX" },
             ].map((o, i) => (
               <div key={i} className="flex flex-col items-center px-2 sm:px-4">
-                <img
-                  src={o.icon}
-                  alt={o.title}
-                  className="w-12 h-12 sm:w-16 sm:h-16 mb-2 sm:mb-3"
-                />
-                <h3
-                  className="text-red-600 font-bold text-sm sm:text-base md:text-lg"
-                  style={orbitronStyle}
-                >
-                  {o.title}
-                </h3>
-                <p className="text-gray-600 text-xs sm:text-sm">{o.email}</p>
-                <p className="text-gray-600 text-xs sm:text-sm">{o.phone}</p>
+                <img src={o.icon} alt={o.title} className="w-12 h-12 sm:w-16 sm:h-16 mb-2 sm:mb-3" />
+                <h3 className="text-[#D72638] font-bold text-sm sm:text-base md:text-lg" style={orbitronStyle}>{o.title}</h3>
+                <p className="text-[#000000] text-xs sm:text-sm">{o.email}</p>
+                <p className="text-[#000000] text-xs sm:text-sm">{o.phone}</p>
               </div>
             ))}
           </div>
         </section>
+
+        {/* Popup Modal with Fade */}
+        {showPopup && (
+          <div className={`fixed inset-0 bg-[#000000] bg-opacity-50 flex justify-center items-center z-50 transition-opacity duration-500 ${fadeIn ? "opacity-100" : "opacity-0"}`}>
+            <div className={`bg-[#f5f5f5] p-6 rounded-lg shadow-lg max-w-sm w-full text-center transform transition-transform duration-500 ${fadeIn ? "scale-100" : "scale-90"}`}>
+              <h3 className="text-xl font-bold mb-4">Thank you!</h3>
+              <p>Your message has been received. We will get back to you shortly.</p>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <Footer />

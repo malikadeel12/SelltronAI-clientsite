@@ -22,14 +22,14 @@ export default function Demo() {
       />
 
       <section 
-        className="px-6 py-12 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center" 
+        className="px-4 sm:px-6 md:px-6 py-10 md:py-12 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-10 items-center" 
         style={openSansStyle}
       >
         {/* Left Side Text */}
         <div>
           {/* Label */}
           <span 
-            className="text-sm text-red-600 font-bold bg-[#E9D8FF] px-3 py-1 rounded-full"
+            className="text-sm sm:text-base text-[#D72638] font-bold bg-[#F5F5F5] px-3 py-1 rounded-full"
             style={openSansStyle}
           >
             Demo
@@ -37,7 +37,7 @@ export default function Demo() {
 
           {/* Heading */}
           <h3 
-            className="text-2xl md:text-3xl font-bold mt-3 leading-snug"
+            className="text-2xl sm:text-3xl md:text-3xl font-bold mt-3 leading-snug"
             style={orbitronStyle}
           >
             Demo Of Live Sales Call <br className="hidden md:block"/> With AI Assistant
@@ -45,7 +45,7 @@ export default function Demo() {
 
           {/* Description */}
           <p 
-            className="text-gray-600 mt-4 text-sm md:text-base leading-relaxed"
+            className="text-[#000000] mt-4 text-sm sm:text-base md:text-base leading-relaxed"
             style={openSansStyle}
           >
             We are dedicated to empowering individuals, businesses, and communities 
@@ -57,30 +57,30 @@ export default function Demo() {
 
           {/* Buttons */}
           <div className="mt-6 flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0">
-            <Link 
-              to="/signUp" 
-              className="text-red-700 px-5 py-2 rounded-full border border-red-600 hover:bg-gray-100 w-full sm:w-auto text-center"
+            <a 
+              href="/signUp" 
+              className="text-[#D72638] px-5 py-2 rounded-full border border-[#D72638] hover:bg-[#f5f5f5] w-full sm:w-auto text-center"
               style={openSansStyle}
             >
               Sign Up
-            </Link>
+            </a>
             
-            <Link 
-              to="/contactpage" 
-              className="bg-yellow-400 px-5 py-2 rounded-full hover:bg-yellow-500 w-full sm:w-auto text-center"
+            <a 
+              href="/contactpage" 
+              className="bg-[#FFD700] px-5 py-2 rounded-full hover:bg-[#FFD700] w-full sm:w-auto text-center"
               style={openSansStyle}
             >
               Contact Us
-            </Link>
+            </a>
           </div>
         </div>
 
         {/* Right Side Image */}
-        <div className="flex justify-center">
+        <div className="flex justify-center md:justify-end mt-6 md:mt-0">
           <img
             src={demoImg}
             alt="Demo"
-            className="rounded-lg shadow-md max-w-sm w-full"
+            className="rounded-lg shadow-md max-w-xs sm:max-w-sm md:max-w-md w-full"
           />
         </div>
       </section>

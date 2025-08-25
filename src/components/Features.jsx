@@ -1,7 +1,7 @@
 import React from "react";
-import icon1 from "../assets/icons/icon1.png";
-import icon2 from "../assets/icons/icon2.png";
-import icon3 from "../assets/icons/icon3.png";
+import icon1 from "../assets/icons/icons1.svg";
+import icon2 from "../assets/icons/icons2.png.svg";
+import icon3 from "../assets/icons/icons3.png.svg";
 
 // Font styles
 const orbitronStyle = {
@@ -40,59 +40,45 @@ export default function Features() {
         rel="stylesheet"
       />
 
-      <section className="px-6 py-12 max-w-6xl mx-auto" style={openSansStyle}>
+      <section className="px-4 sm:px-6 md:px-6 py-10 md:py-12 max-w-6xl mx-auto" style={openSansStyle}>
         {/* 🔹 Top Label */}
-        <div className="bg-yellow-200 text-black text-sm font-medium px-4 py-1 rounded-full w-fit mx-auto mb-6">
+        <div className="bg-[#FFD700] text-[#000000] text-sm font-medium px-4 py-1 rounded-full w-fit mx-auto mb-6">
           Features
         </div>
 
         {/* Heading */}
-        <h2
-          className="text-2xl md:text-3xl text-center mb-4"
-          style={orbitronStyle}
-        >
+        <h2 className="text-2xl sm:text-3xl md:text-3xl text-center mb-4" style={orbitronStyle}>
           Powerful AI Tools for Sales &<br />
           Customer Support
         </h2>
 
-        <p
-          className="text-center text-gray-600 mb-10 text-sm md:text-base"
-          style={openSansStyle}
-        >
+        {/* Description */}
+        <p className="text-center text-[#000000] mb-10 text-sm sm:text-base md:text-base" style={openSansStyle}>
           Unleash innovation and accelerate growth with our dynamic product.
         </p>
 
         {/* 🔹 Cards */}
-        <div className="bg-white shadow-md rounded-lg p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 text-center">
+        <div className="bg-[#FFFFFF] shadow-md rounded-lg p-4 sm:p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 md:gap-6 text-center">
           {features.map((f, i) => (
-            <div
-              key={i}
-              className="relative flex flex-col items-center px-4 md:px-6"
-            >
+            <div key={i} className="relative flex flex-col items-center px-2 sm:px-4 md:px-6 mb-4 sm:mb-0">
               {/* Icon */}
               <img
                 src={f.icon}
                 alt={f.title}
-                className="mx-auto mb-4 w-12 h-12 md:w-14 md:h-14"
+                className="mx-auto mb-4 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14"
               />
 
               {/* Title + Desc with red shade bg */}
-              <div className="relative rounded-lg p-4 w-full max-w-xs">
+              <div className="relative rounded-lg p-3 sm:p-4 w-full max-w-xs">
                 {/* 🔥 Red shade background */}
                 <div className="absolute inset-0 bg-gradient-to-b from-red-200/60 to-transparent rounded-lg blur-2xl"></div>
 
                 {/* Content */}
                 <div className="relative">
-                  <h3
-                    className="text-base md:text-lg font-semibold"
-                    style={orbitronStyle}
-                  >
+                  <h3 className="text-base sm:text-lg md:text-lg font-semibold" style={orbitronStyle}>
                     {f.title}
                   </h3>
-                  <p
-                    className="mt-2 text-gray-600 text-sm md:text-base"
-                    style={openSansStyle}
-                  >
+                  <p className="mt-2 text-[#000000] text-sm sm:text-base md:text-base" style={openSansStyle}>
                     {f.desc}
                   </p>
                 </div>

@@ -21,7 +21,7 @@ export default function AboutPage() {
         rel="stylesheet"
       />
 
-      <div className="bg-gray-50 min-h-screen flex flex-col" style={openSansStyle}>
+      <div className="bg-[#f5f5f5] min-h-screen flex flex-col" style={openSansStyle}>
         {/* Navbar */}
         <Navbar />
 
@@ -33,7 +33,7 @@ export default function AboutPage() {
           >
             About Us – Sell Predator
           </h1>
-          <p className="text-gray-700 text-sm md:text-base leading-relaxed">
+          <p className="text-[#000000] text-sm md:text-base leading-relaxed">
             At Sell Predator, we believe sales should not be complicated – they
             should be effective. Every day, companies lose valuable time, money,
             and opportunities because sales teams do not have the right
@@ -69,14 +69,14 @@ export default function AboutPage() {
           {/* Right Goals */}
           <div className="flex flex-col space-y-6">
             {/* Goal */}
-            <div className="border border-red-300 rounded-lg p-4 md:p-6 bg-white shadow-sm">
+            <div className="border border-[#D72638] rounded-lg p-4 md:p-6 bg-[#f5f5f5] shadow-sm">
               <h3
                 className="text-lg md:text-xl font-bold mb-2"
                 style={orbitronStyle}
               >
                 Our Goal
               </h3>
-              <p className="text-gray-700 text-sm md:text-base leading-relaxed">
+              <p className="text-[#000000] text-sm md:text-base leading-relaxed">
                 Our goal is simple: to turn beginners into professionals instantly.
                 While traditional systems only provide raw data, Sell Predator
                 gives clear and actionable recommendations. This leads to higher
@@ -85,14 +85,14 @@ export default function AboutPage() {
             </div>
 
             {/* Mission */}
-            <div className="border border-red-300 rounded-lg p-4 md:p-6 bg-white shadow-sm">
+            <div className="border border-[#D72638] rounded-lg p-4 md:p-6 bg-[#f5f5f5] shadow-sm">
               <h3
                 className="text-lg md:text-xl font-bold mb-2"
                 style={orbitronStyle}
               >
                 Our Mission
               </h3>
-              <p className="text-gray-700 text-sm md:text-base leading-relaxed">
+              <p className="text-[#000000] text-sm md:text-base leading-relaxed">
                 We aim to make the sales process smarter, easier, and more
                 successful. Every sales professional – no matter their experience
                 level – should have the tools to achieve their best performance.
@@ -100,14 +100,14 @@ export default function AboutPage() {
             </div>
 
             {/* Vision */}
-            <div className="border border-red-300 rounded-lg p-4 md:p-6 bg-white shadow-sm">
+            <div className="border border-[#D72638] rounded-lg p-4 md:p-6 bg-[#f5f5f5] shadow-sm">
               <h3
                 className="text-lg md:text-xl font-bold mb-2"
                 style={orbitronStyle}
               >
                 Our Vision
               </h3>
-              <p className="text-gray-700 text-sm md:text-base leading-relaxed">
+              <p className="text-[#000000] text-sm md:text-base leading-relaxed">
                 The future of sales will no longer rely on luck or guesswork. It
                 will be powered by intelligent technology that actively supports
                 sales teams. Sell Predator is continuously evolving, adding new
@@ -118,11 +118,11 @@ export default function AboutPage() {
         </section>
 
         {/* Bottom Quality Section */}
-        <section className="bg-white shadow-md max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-10 mt-10 mb-12 rounded-lg">
+        <section className="bg-[#f5f5f5] shadow-md max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-10 mt-10 mb-12 rounded-lg">
           <div className="space-y-6">
             {/* Heading */}
             <h3
-              className="text-2xl md:text-3xl font-bold text-gray-800"
+              className="text-2xl md:text-3xl font-bold text-[#000000]"
               style={orbitronStyle}
             >
               Quality over Quantity
@@ -131,12 +131,12 @@ export default function AboutPage() {
             {/* Line + Text */}
             <div className="flex flex-col md:flex-row items-start">
               {/* Vertical Line */}
-              <div className="w-full md:w-1 h-1 md:h-auto bg-red-600 mb-4 md:mb-0 md:mr-6 rounded"></div>
+              <div className="w-full md:w-1 h-1 md:h-auto bg-[#D72638] mb-4 md:mb-0 md:mr-6 rounded"></div>
 
               {/* Paragraph */}
-              <p className="text-gray-600 text-sm md:text-base leading-relaxed">
+              <p className="text-[#000000] text-sm md:text-base leading-relaxed">
                 To guarantee excellent support and a flawless user experience,{" "}
-                <span className="font-semibold text-gray-800">Sell Predator</span>{" "}
+                <span className="font-semibold text-[#000000]">Sell Predator</span>{" "}
                 deliberately accepts only a limited number of clients at a time.
                 By focusing on quality instead of mass adoption, we ensure that
                 every customer receives the highest level of service and

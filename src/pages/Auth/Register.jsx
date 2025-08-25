@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import logo from "../../assets/mainlogo/logoicon.png";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -22,6 +22,16 @@ export default function SignUp() {
   });
   const [error, setError] = useState("");
 
+  // ✅ Pre-fill dummy admin in localStorage
+  useEffect(() => {
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+    const adminExists = users.find((u) => u.email === "admin@gmail.com");
+    if (!adminExists) {
+      users.push({ name: "Admin", email: "admin@gmail.com", terms: true });
+      localStorage.setItem("users", JSON.stringify(users));
+    }
+  }, []);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
@@ -40,19 +50,25 @@ export default function SignUp() {
       return;
     }
 
-    // Save to localStorage
     let users = JSON.parse(localStorage.getItem("users")) || [];
+
     // Check if email already exists
     const exists = users.find((u) => u.email === formData.email);
-    if (exists) {
-      setError("Email already registered! Please login.");
-      return;
+    if (!exists) {
+      users.push(formData);
+      localStorage.setItem("users", JSON.stringify(users));
     }
-    users.push(formData);
-    localStorage.setItem("users", JSON.stringify(users));
+
     setError("");
-    alert("Signup successful!");
-    navigate("/predatordashboard"); // Redirect to login page
+
+    // ✅ Dummy admin redirect
+    if (formData.email === "admin@gmail.com") {
+      alert("Admin login successful!");
+      navigate("/AdminDashboard"); // Redirect to Admin Dashboard
+    } else {
+      alert("Signup successful!");
+      navigate("/predatordashboard"); // Redirect normal dashboard
+    }
   };
 
   return (
@@ -63,7 +79,7 @@ export default function SignUp() {
       />
 
       <div
-        className="min-h-[90vh] flex flex-col items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 py-4"
+        className="min-h-[90vh] flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-4"
         style={openSansStyle}
       >
         <img src={logo} alt="Logo" className="w-16 sm:w-20 mb-3" />
@@ -74,13 +90,15 @@ export default function SignUp() {
         >
           Sign Up for Sell Predator
         </h1>
-        <p className="text-gray-500 mb-5 text-center text-xs sm:text-sm max-w-md">
+        <p className="text-[#000000] mb-5 text-center text-xs sm:text-sm max-w-md">
           Fill in your details and our team will get back to you shortly.
         </p>
 
-        <div className="bg-white shadow-md rounded-lg p-5 sm:p-6 w-full max-w-md">
+        <div className="bg-[#f5f5f5] shadow-md rounded-lg p-5 sm:p-6 w-full max-w-md">
           <div className="mb-3">
-            <label className="block text-xs sm:text-sm text-gray-600 mb-1">Name</label>
+            <label className="block text-xs sm:text-sm text-[#000000] mb-1">
+              Name
+            </label>
             <input
               type="text"
               name="name"
@@ -92,7 +110,9 @@ export default function SignUp() {
           </div>
 
           <div className="mb-3">
-            <label className="block text-xs sm:text-sm text-gray-600 mb-1">Email</label>
+            <label className="block text-xs sm:text-sm text-[#000000] mb-1">
+              Email
+            </label>
             <input
               type="email"
               name="email"
@@ -104,13 +124,13 @@ export default function SignUp() {
           </div>
 
           <div className="mb-3">
-            <label className="block text-xs sm:text-sm text-gray-600 mb-1">
+            <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Phone number (Optional)
             </label>
             <div className="flex flex-col sm:flex-row">
               <select
                 name="country"
-                className="border rounded-t-md sm:rounded-l-md sm:rounded-tr-none px-2 py-2 text-xs sm:text-sm text-gray-600"
+                className="border rounded-t-md sm:rounded-l-md sm:rounded-tr-none px-2 py-2 text-xs sm:text-sm text-[#000000]"
               >
                 <option>US</option>
                 <option>PK</option>
@@ -127,7 +147,7 @@ export default function SignUp() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-3 flex items-start sm:items-center">
+          <p className="text-xs text-[#000000] mt-3 flex items-start sm:items-center">
             <input
               type="checkbox"
               name="terms"
@@ -148,16 +168,17 @@ export default function SignUp() {
             </span>
           </p>
 
-          {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
+          {error && <p className="text-[#D72638] text-xs mt-2">{error}</p>}
 
           <button
             onClick={handleSubmit}
-            className="w-full bg-yellow-400 text-gray-900 font-medium py-2 rounded-full text-sm hover:bg-yellow-500 transition mt-4"
+            className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-4"
           >
             Get Started
           </button>
         </div>
-        <p className="mt-4 text-[10px] sm:text-xs text-gray-500 text-center">
+
+        <p className="mt-4 text-[10px] sm:text-xs text-[#000000] text-center">
           © 2025 Sell Predator. All rights reserved.
         </p>
       </div>
