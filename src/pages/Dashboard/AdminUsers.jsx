@@ -2,14 +2,8 @@
 import React, { useState } from "react";
 
 // Font styles
-const orbitronStyle = {
-  fontFamily: "'Orbitron', sans-serif",
-  fontWeight: 600,
-};
-
-const openSansStyle = {
-  fontFamily: "'Open Sans', sans-serif",
-};
+const orbitronStyle = { fontFamily: "'Orbitron', sans-serif", fontWeight: 600 };
+const openSansStyle = { fontFamily: "'Open Sans', sans-serif" };
 
 const dummyUsers = [
   { id: 1, name: "Alice", email: "alice@mail.com" },
@@ -43,18 +37,21 @@ export default function AdminUsers() {
       />
 
       <div className="p-3 md:p-6" style={{ backgroundColor: "#F5F5F5", ...openSansStyle }}>
-        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6" style={{ color: "#000000", ...orbitronStyle }}>
+        <h1
+          className="text-2xl md:text-3xl font-bold mb-4 md:mb-6"
+          style={{ color: "#000000", ...orbitronStyle }}
+        >
           Users List
         </h1>
 
         <div className="overflow-x-auto rounded-xl shadow-lg" style={{ backgroundColor: "#F5F5F5" }}>
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full border-collapse text-sm md:text-base">
             <thead>
               <tr style={{ backgroundColor: "#FFD700" }}>
-                <th className="py-3 px-4 text-left text-black uppercase text-sm md:text-base font-semibold">ID</th>
-                <th className="py-3 px-4 text-left text-black uppercase text-sm md:text-base font-semibold">Name</th>
-                <th className="py-3 px-4 text-left text-black uppercase text-sm md:text-base font-semibold">Email</th>
-                <th className="py-3 px-4 text-left text-black uppercase text-sm md:text-base font-semibold">Actions</th>
+                <th className="py-3 px-2 sm:px-4 text-left text-black uppercase font-semibold">ID</th>
+                <th className="py-3 px-2 sm:px-4 text-left text-black uppercase font-semibold">Name</th>
+                <th className="py-3 px-2 sm:px-4 text-left text-black uppercase font-semibold">Email</th>
+                <th className="py-3 px-2 sm:px-4 text-left text-black uppercase font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -64,13 +61,13 @@ export default function AdminUsers() {
                   className="border-b transition-all duration-200 hover:bg-gray-50"
                   style={{ backgroundColor: index % 2 === 0 ? "#F5F5F5" : "#FFFFFF" }}
                 >
-                  <td className="py-2 px-3 md:py-2 md:px-4 text-black">{user.id}</td>
-                  <td className="py-2 px-3 md:py-2 md:px-4 text-black">{user.name}</td>
-                  <td className="py-2 px-3 md:py-2 md:px-4 text-black">{user.email}</td>
-                  <td className="py-2 px-3 md:py-2 md:px-4">
+                  <td className="py-2 px-2 sm:px-4">{user.id}</td>
+                  <td className="py-2 px-2 sm:px-4">{user.name}</td>
+                  <td className="py-2 px-2 sm:px-4">{user.email}</td>
+                  <td className="py-2 px-2 sm:px-4">
                     <button
                       onClick={() => handleDelete(user.id)}
-                      className="px-3 py-1 md:px-4 md:py-2 rounded-lg shadow-sm hover:shadow-md text-sm md:text-base transition-all duration-200"
+                      className="w-full sm:w-auto px-2 py-1 sm:px-4 sm:py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
                       style={{ backgroundColor: "#FFD700", color: "#000000", ...orbitronStyle }}
                     >
                       Delete
