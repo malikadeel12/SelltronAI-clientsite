@@ -85,7 +85,7 @@ export default function AdminUsers() {
                 Users
               </Link>
 
-              {/* Logout button placed right under links */}
+              {/* Logout button */}
               <button
                 onClick={handleLogout}
                 className="mt-4 px-4 py-2 cursor-pointer rounded-lg bg-[#FFD700] text-[#000000] font-semibold shadow hover:shadow-md transition"

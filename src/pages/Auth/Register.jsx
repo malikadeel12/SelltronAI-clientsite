@@ -64,10 +64,10 @@ export default function SignUp() {
     // ✅ Dummy admin redirect
     if (formData.email === "admin@gmail.com") {
       alert("Admin login successful!");
-      navigate("/AdminDashboard"); // Redirect to Admin Dashboard
+      navigate("/AdminDashboard");
     } else {
       alert("Signup successful!");
-      navigate("/predatordashboard"); // Redirect normal dashboard
+      navigate("/predatordashboard");
     }
   };
 

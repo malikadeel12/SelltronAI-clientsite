@@ -1,4 +1,4 @@
-// src/pages/AdminLayout.jsx
+
 import React from "react";
 import {
   LineChart,
@@ -85,7 +85,7 @@ export default function AdminLayout() {
                 Users
               </Link>
 
-              {/* 🔹 Logout Button (Users ke neeche rakha) */}
+              {/* 🔹 Logout Button */}
               <button
                 onClick={handleLogout}
                 className="px-3 py-2 cursor-pointer rounded-lg bg-[#FFD700] text-[#000000] font-semibold shadow hover:shadow-md transition"
