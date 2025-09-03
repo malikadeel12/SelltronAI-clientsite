@@ -241,24 +241,24 @@ export default function SignUp() {
         />
 
         <div
-          className="min-h-[90vh] flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-4"
+          className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-2"
           style={openSansStyle}
         >
-          <img src={logo} alt="Logo" className="w-16 sm:w-20 mb-3" />
+          <img src={logo} alt="Logo" className="w-12 sm:w-16 mb-2" />
 
           <h1
-            className="text-lg sm:text-2xl font-bold text-purple-800 mb-1 text-center"
+            className="text-lg sm:text-xl font-bold text-purple-800 mb-1 text-center"
             style={orbitronStyle}
           >
             Verify Your Email
           </h1>
-          <p className="text-[#000000] mb-5 text-center text-xs sm:text-sm max-w-md">
+          <p className="text-[#000000] mb-3 text-center text-xs sm:text-sm max-w-md">
             We've sent a verification code to <strong>{formData.email}</strong>
           </p>
 
-          <div className="bg-[#f5f5f5] shadow-md rounded-lg p-5 sm:p-6 w-full max-w-md">
+          <div className="bg-[#f5f5f5] shadow-md rounded-lg p-4 sm:p-5 w-full max-w-md">
             {/* Timer */}
-            <div className="mb-6">
+            <div className="mb-4">
               <Timer 
                 seconds={60} 
                 onExpire={handleTimerExpire}
@@ -267,7 +267,7 @@ export default function SignUp() {
             </div>
 
             {/* Verification Code Input */}
-            <div className="mb-4">
+            <div className="mb-3">
               <label className="block text-xs sm:text-sm text-[#000000] mb-2">
                 Enter Verification Code
               </label>
@@ -281,25 +281,25 @@ export default function SignUp() {
               />
             </div>
 
-            {error && <p className="text-[#D72638] text-xs mt-2 mb-4">{error}</p>}
+            {error && <p className="text-[#D72638] text-xs mt-2 mb-3">{error}</p>}
 
             <button
               onClick={handleVerifyCode}
               disabled={loading || timerExpired}
-              className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-4 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "Verifying..." : "Verify & Create Account"}
             </button>
 
             <button
               onClick={handleBackToSignup}
-              className="w-full border border-gray-300 text-[#000000] bg-white py-2 rounded-full text-sm hover:bg-gray-50 transition mt-3 cursor-pointer"
+              className="w-full border border-gray-300 text-[#000000] bg-white py-2 rounded-full text-sm hover:bg-gray-50 transition mt-2 cursor-pointer"
             >
               Back to Sign Up
             </button>
           </div>
 
-          <p className="mt-4 text-[10px] sm:text-xs text-[#000000] text-center">
+          <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
             © 2025 Sell Predator. All rights reserved.
           </p>
         </div>
@@ -316,23 +316,23 @@ export default function SignUp() {
       />
 
       <div
-        className="min-h-[90vh] flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-4"
+        className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-2"
         style={openSansStyle}
       >
-        <img src={logo} alt="Logo" className="w-16 sm:w-20 mb-3" />
+        <img src={logo} alt="Logo" className="w-12 sm:w-16 mb-2" />
 
         <h1
-          className="text-lg sm:text-2xl font-bold text-purple-800 mb-1 text-center"
+          className="text-lg sm:text-xl font-bold text-purple-800 mb-1 text-center"
           style={orbitronStyle}
         >
           Sign Up for Sell Predator
         </h1>
-        <p className="text-[#000000] mb-5 text-center text-xs sm:text-sm max-w-md">
+        <p className="text-[#000000] mb-3 text-center text-xs sm:text-sm max-w-md">
           Fill in your details and verify your email to get started.
         </p>
 
-        <div className="bg-[#f5f5f5] shadow-md rounded-lg p-5 sm:p-6 w-full max-w-md">
-          <div className="mb-3">
+        <div className="bg-[#f5f5f5] shadow-md rounded-lg p-4 sm:p-5 w-full max-w-md">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Name
             </label>
@@ -346,7 +346,7 @@ export default function SignUp() {
             />
           </div>
 
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Email
             </label>
@@ -360,7 +360,7 @@ export default function SignUp() {
             />
           </div>
 
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Password
             </label>
@@ -374,7 +374,7 @@ export default function SignUp() {
             />
           </div>
           
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Confirm Password
             </label>
@@ -388,7 +388,7 @@ export default function SignUp() {
             />
           </div>
 
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Phone number (Optional)
             </label>
@@ -412,7 +412,7 @@ export default function SignUp() {
             </div>
           </div>
 
-          <p className="text-xs text-[#000000] mt-3 flex items-start sm:items-center">
+          <p className="text-xs text-[#000000] mt-2 flex items-start sm:items-center">
             <input
               type="checkbox"
               name="terms"
@@ -438,13 +438,13 @@ export default function SignUp() {
           <button
             onClick={handleSendVerification}
             disabled={loading}
-            className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-4 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? "Sending Code..." : "Signup"}
           </button>
 
           {/* Or divider */}
-          <div className="flex items-center my-3">
+          <div className="flex items-center my-2">
             <div className="flex-1 h-px bg-gray-300" />
             <span className="px-2 text-xs text-gray-500">or</span>
             <div className="flex-1 h-px bg-gray-300" />
@@ -462,14 +462,14 @@ export default function SignUp() {
         </div>
 
         {/* Existing account redirect CTA */}
-        <p className="text-xs text-[#000000] mt-3 text-center">
+        <p className="text-xs text-[#000000] mt-2 text-center">
           Already have an account? {" "}
           <Link to="/login" className="text-purple-600 underline">
             Login
           </Link>
         </p>
 
-        <p className="mt-4 text-[10px] sm:text-xs text-[#000000] text-center">
+        <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
           © 2025 Sell Predator. All rights reserved.
         </p>
       </div>

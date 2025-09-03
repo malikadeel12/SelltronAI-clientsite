@@ -146,23 +146,23 @@ export default function Login() {
       />
 
       <div
-        className="min-h-[90vh] flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-4"
+        className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f5] px-4 sm:px-6 lg:px-8 py-2"
         style={openSansStyle}
       >
-        <img src={logo} alt="Logo" className="w-16 sm:w-20 mb-3" />
+        <img src={logo} alt="Logo" className="w-12 sm:w-16 mb-2" />
 
         <h1
-          className="text-lg sm:text-2xl font-bold text-purple-800 mb-1 text-center"
+          className="text-lg sm:text-xl font-bold text-purple-800 mb-1 text-center"
           style={orbitronStyle}
         >
           Login to Sell Predator
         </h1>
-        <p className="text-[#000000] mb-5 text-center text-xs sm:text-sm max-w-md">
+        <p className="text-[#000000] mb-3 text-center text-xs sm:text-sm max-w-md">
           Enter your credentials to access your dashboard.
         </p>
 
-        <div className="bg-[#f5f5f5] shadow-md rounded-lg p-5 sm:p-6 w-full max-w-md">
-          <div className="mb-3">
+        <div className="bg-[#f5f5f5] shadow-md rounded-lg p-4 sm:p-5 w-full max-w-md">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Email
             </label>
@@ -176,7 +176,7 @@ export default function Login() {
             />
           </div>
 
-          <div className="mb-3">
+          <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Password
             </label>
@@ -194,13 +194,13 @@ export default function Login() {
 
           <button
             onClick={handleSubmit}
-            className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-4 cursor-pointer"
+            className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-3 cursor-pointer"
           >
             Login
           </button>
 
           {/* --- Or divider --- */}
-          <div className="flex items-center my-3">
+          <div className="flex items-center my-2">
             <div className="flex-1 h-px bg-gray-300" />
             <span className="px-2 text-xs text-gray-500">or</span>
             <div className="flex-1 h-px bg-gray-300" />
@@ -217,7 +217,7 @@ export default function Login() {
             <span>Continue with Google</span>
           </button>
 
-          <p className="text-xs text-[#000000] mt-3 text-center">
+          <p className="text-xs text-[#000000] mt-2 text-center">
             Don&apos;t have an account? {" "}
             <Link to="/signUp" className="text-purple-600 underline">
               Sign Up
@@ -225,7 +225,7 @@ export default function Login() {
           </p>
         </div>
 
-        <p className="mt-4 text-[10px] sm:text-xs text-[#000000] text-center">
+        <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
           © 2025 Sell Predator. All rights reserved.
         </p>
       </div>
