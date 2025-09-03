@@ -1,5 +1,12 @@
-import React, { useState, useEffect } from "react";
+// Change Summary (MCP Context 7 Best Practices)
+// - Wired Cockpit to dummy Voice pipeline APIs (STT -> GPT -> TTS).
+// - Added recording via MediaRecorder, mode/voice controls, and browser TTS playback.
+// - Why: Implements Voice → GPT → Voice flow with replaceable backend providers.
+// - Related: `client/src/lib/api.js`, `server/src/routes/voice.js`, `server/src/index.js`.
+// - TODO: Replace dummy pipeline with Google STT/TTS and GPT-4 providers.
+import React, { useState, useEffect, useRef } from "react";
 import Confetti from "react-confetti";
+import { fetchVoiceConfig, runVoicePipeline, runStt, runGpt, runTts } from "../../lib/api";
 
 // Font styles
 const orbitronStyle = {
@@ -12,9 +19,9 @@ const openSansStyle = {
 };
 
 export default function PredatorDashboard() {
-  const [language, setLanguage] = useState("German");
-  const [voice, setVoice] = useState("AI Voice");
-  const [aiVoiceSelection, setAiVoiceSelection] = useState("Voice 1");
+  const [language, setLanguage] = useState("English");
+  const [voice, setVoice] = useState("voice_1");
+  const [aiVoiceSelection, setAiVoiceSelection] = useState("voice_1");
   const [speechActive, setSpeechActive] = useState(true);
   const [transcript, setTranscript] = useState("");
   const [highlights, setHighlights] = useState("");
@@ -24,6 +31,10 @@ export default function PredatorDashboard() {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [mode, setMode] = useState("sales");
+  const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
 
   const showToast = (msg) => {
     setToast({ show: true, message: msg });
@@ -35,43 +46,109 @@ export default function PredatorDashboard() {
     setTimeout(() => setShowConfetti(false), 1500);
   };
 
-  const handleStart = () => {
-    setTranscript("Predator Live Transcript started...");
-    setPredatorAnswer("Dummy answer from Predator");
-    triggerConfetti();
-    showToast("Predator Live Transcript started");
+  useEffect(() => {
+    // Load available voices/modes from backend (dummy for now)
+    fetchVoiceConfig()
+      .then((cfg) => {
+        setVoices(cfg.voices || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      recordedChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      mediaRecorder.onstart = () => setRecording(true);
+      mediaRecorder.onstop = () => setRecording(false);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      showToast("Recording started");
+    } catch (e) {
+      showToast("Mic permission denied");
+    }
   };
 
-  const handleStop = () => {
-    setTranscript("Predator Live Transcript stopped.");
-    setPredatorAnswer("Dummy answer after stopping...");
-    triggerConfetti();
-    showToast("Predator Live Transcript stopped");
+  const stopRecording = () => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      rec.stop();
+      rec.stream.getTracks().forEach((t) => t.stop());
+    }
   };
 
-  const handleRecording = () => {
-    setRecording(true);
-    setTranscript("🎤 Recording... speaking dummy text...");
-    showToast("Recording Own Voice started");
-    setTimeout(() => setRecording(false), 3000);
+  const handleStart = async () => {
+    await startRecording();
+    setTranscript("Listening...");
   };
 
-  const handleTranscribe = () => {
+  const handleStop = async () => {
+    stopRecording();
+    showToast("Processing...");
+    try {
+      const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
+      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de" : "en" });
+      setTranscript(result.transcript || "");
+      setPredatorAnswer(result.responseText || "");
+      // Use browser SpeechSynthesis for dummy TTS if enabled
+      if (speechActive && (result.responseText || predatorAnswer)) {
+        const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+      }
+      triggerConfetti();
+      showToast("Ready");
+    } catch (e) {
+      showToast("Pipeline failed");
+    }
+  };
+
+  const handleRecording = async () => {
+    if (recording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
+  const handleTranscribe = async () => {
+    if (!recordedChunksRef.current.length) {
+      showToast("No audio recorded");
+      return;
+    }
     setTranscribing(true);
-    showToast("Transcription started...");
-    setTimeout(() => {
-      setHighlights("Dummy Highlights & Conversion History generated...");
+    showToast("Transcribing...");
+    try {
+      const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
+      const { transcript: t } = await runStt({ audioBlob: blob, language: language === "German" ? "de" : "en" });
+      setHighlights(`Highlights (dummy): ${t}`);
+    } catch (e) {
+      showToast("STT failed");
+    } finally {
       setTranscribing(false);
-      showToast("Transcription completed");
-    }, 2000);
+    }
   };
 
-  const handleSubmitAsk = () => {
-    const answer = `GPT says: This is a dummy answer for "${askText}"`;
-    setPredatorAnswer(answer);
-    triggerConfetti();
-    setAskText("");
-    showToast("GPT query submitted");
+  const handleSubmitAsk = async () => {
+    if (!askText.trim()) return;
+    try {
+      const { responseText } = await runGpt({ transcript: askText, mode });
+      setPredatorAnswer(responseText);
+      if (speechActive) {
+        const utter = new SpeechSynthesisUtterance(responseText);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+      }
+      triggerConfetti();
+      setAskText("");
+      showToast("GPT responded");
+    } catch (e) {
+      showToast("GPT failed");
+    }
   };
 
   const handleGoodAnswer = (choice) => {
@@ -144,19 +221,20 @@ export default function PredatorDashboard() {
                 onChange={(e) => setLanguage(e.target.value)}
                 className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
               >
-                <option>German</option>
                 <option>English</option>
+                <option>German</option>
               </select>
             </label>
 
             <label className="flex flex-col text-sm font-medium">
-              Voice
+              Mode
               <select
-                value={voice}
-                onChange={(e) => setVoice(e.target.value)}
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
                 className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
               >
-                <option>AI Voice</option>
+                <option value="sales">Sales</option>
+                <option value="support">Support</option>
               </select>
             </label>
           </div>
@@ -166,11 +244,12 @@ export default function PredatorDashboard() {
               AI Voice Selection
               <select
                 value={aiVoiceSelection}
-                onChange={(e) => setAiVoiceSelection(e.target.value)}
+                onChange={(e) => { setAiVoiceSelection(e.target.value); setVoice(e.target.value); }}
                 className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
               >
-                <option>Voice 1</option>
-                <option>Voice 2</option>
+                {voices.map(v => (
+                  <option key={v.id} value={v.id}>{v.label}</option>
+                ))}
               </select>
             </label>
 

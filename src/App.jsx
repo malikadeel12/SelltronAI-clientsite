@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route } from "react-router-dom";
 import Home from './pages/LandingPages/Home';
 import SignUp from "./pages/Auth/Register";
+import Login from "./pages/Auth/Login";
 import PricingPage from './pages/LandingPages/PricingPage';
 import ContactPage from './pages/LandingPages/ContactPage';
 import AboutPage from './pages/LandingPages/AboutPage';
@@ -25,6 +26,7 @@ function App() {
 
 
       <Route path="/signUp" element={<SignUp />} />
+      <Route path="/login" element={<Login />} />
      
 
     </Routes>
