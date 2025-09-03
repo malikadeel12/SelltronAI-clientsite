@@ -9,7 +9,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || "https://selltronai-serverside.onrender.com";
 
 // --- Helper: JSON POST ---
-async function postJson(path, body) {s
+async function postJson(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
