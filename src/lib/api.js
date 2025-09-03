@@ -6,10 +6,10 @@
  * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://selltronai-serverside.onrender.com";
 
 // --- Helper: JSON POST ---
-async function postJson(path, body) {
+async function postJson(path, body) {s
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
