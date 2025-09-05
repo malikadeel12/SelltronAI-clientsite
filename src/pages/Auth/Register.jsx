@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import logo from "../../assets/mainlogo/logoicon.png";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup } from "firebase/auth";
+import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
 import { sendVerificationCode, verifyEmailCode } from "../../lib/api";
 import Timer from "../../components/Timer";
@@ -133,6 +133,13 @@ export default function SignUp() {
         formData.password
       );
 
+      // Update user profile with name
+      if (formData.name) {
+        await updateProfile(cred.user, {
+          displayName: formData.name
+        });
+      }
+
       // Assign admin role for specific email (demo)
       if (formData.email === "admin@gmail.com") {
         const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -205,6 +212,14 @@ export default function SignUp() {
       
       try {
         const cred = await signInWithPopup(auth, provider);
+        
+        // Update display name if not set
+        if (cred.user && !cred.user.displayName) {
+          await updateProfile(cred.user, {
+            displayName: cred.user.email?.split('@')[0] || 'User'
+          });
+        }
+        
         if (cred.user?.email === "admin@gmail.com") {
           const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
           await fetch(`${apiBase}/api/auth/assign-role`, {

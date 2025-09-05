@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import logo from "../../assets/mainlogo/logoicon.png";
 import { useNavigate, Link } from "react-router-dom";
-import { signInWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
 
 /**
@@ -165,6 +165,14 @@ export default function Login() {
       // Try popup first; fallback to redirect if blocked
       try {
         const cred = await signInWithPopup(auth, provider);
+        
+        // Update display name if not set
+        if (cred.user && !cred.user.displayName) {
+          await updateProfile(cred.user, {
+            displayName: cred.user.email?.split('@')[0] || 'User'
+          });
+        }
+        
         const token = await getIdToken(cred.user, true);
         const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
         let who = { role: "user" };

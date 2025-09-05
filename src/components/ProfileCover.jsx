@@ -168,7 +168,7 @@ export default function ProfileCover() {
               </div>
               <p className="text-gray-500 text-xs sm:text-sm mb-1">Display Name</p>
               <p className="text-sm sm:text-lg font-semibold text-gray-900">
-                {user.displayName || "Not provided"}
+                {user.displayName || user.email?.split('@')[0] || "Not provided"}
               </p>
             </div>
 
@@ -183,7 +183,7 @@ export default function ProfileCover() {
               </div>
               <p className="text-gray-500 text-xs sm:text-sm mb-1">Contact</p>
               <p className="text-sm sm:text-lg font-semibold text-gray-900">
-                {user.phoneNumber || "Not provided"}
+                {user.phoneNumber || "Add phone number in account settings"}
               </p>
             </div>
 
