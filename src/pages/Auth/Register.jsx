@@ -3,7 +3,7 @@ import logo from "../../assets/mainlogo/logoicon.png";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { sendVerificationCode, verifyEmailCode } from "../../lib/api";
+import { sendVerificationCode, verifyEmailCode, testApiConnection } from "../../lib/api";
 import Timer from "../../components/Timer";
 
 /**
@@ -104,11 +104,21 @@ export default function SignUp() {
     setError("");
 
     try {
+      // Test API connection first
+      console.log("Testing API connection...");
+      const isConnected = await testApiConnection();
+      
+      if (!isConnected) {
+        setError("Cannot connect to server. Please check your internet connection and try again. If the problem persists, try using a different network.");
+        return;
+      }
+
       await sendVerificationCode(formData.email);
       setStep("verification");
       setTimerExpired(false);
     } catch (e) {
-      setError(e?.message || "Failed to send verification code. Please try again.");
+      console.error("Signup error:", e);
+      setError(e?.message || "Failed to send verification code. Please check your internet connection and try again.");
     } finally {
       setLoading(false);
     }
