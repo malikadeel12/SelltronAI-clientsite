@@ -6,20 +6,41 @@
  * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
  */
 
-// Detect if we're on mobile and adjust API base accordingly
+// Get API base URL with proper fallbacks
 const getApiBase = () => {
+  // First priority: Environment variable (for production)
   const envBase = import.meta.env.VITE_API_BASE;
-  if (envBase) return envBase;
+  if (envBase) {
+    console.log('Using API base from environment:', envBase);
+    return envBase;
+  }
   
-  // Check if we're on mobile or if localhost won't work
+  // Second priority: Check if we're on deployed frontend
+  const isDeployed = window.location.hostname.includes('vercel.app') || 
+                     window.location.hostname.includes('netlify.app') ||
+                     window.location.hostname.includes('github.io') ||
+                     !window.location.hostname.includes('localhost');
+  
+  if (isDeployed) {
+    // Default Render URL - replace with your actual backend URL
+    const renderUrl = "https://selltron-ai-backend.onrender.com";
+    console.log('Using deployed API base:', renderUrl);
+    return renderUrl;
+  }
+  
+  // Third priority: Local development
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   
   if (isMobile && isLocalhost) {
-    // For mobile devices, try to use the current host with port 8000
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+    // For mobile devices on localhost
+    const mobileUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+    console.log('Using mobile localhost API base:', mobileUrl);
+    return mobileUrl;
   }
   
+  // Default localhost for development
+  console.log('Using default localhost API base');
   return "http://localhost:8000";
 };
 
