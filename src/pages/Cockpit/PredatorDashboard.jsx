@@ -6,6 +6,9 @@
 // - TODO: Replace dummy pipeline with Google STT/TTS and GPT-4 providers.
 import React, { useState, useEffect, useRef } from "react";
 import Confetti from "react-confetti";
+import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { getAuthInstance } from "../../lib/firebase";
 import { fetchVoiceConfig, runVoicePipeline, runStt, runGpt, runTts } from "../../lib/api";
 
 // Font styles
@@ -19,6 +22,7 @@ const openSansStyle = {
 };
 
 export default function PredatorDashboard() {
+  const navigate = useNavigate();
   const [language, setLanguage] = useState("English");
   const [voice, setVoice] = useState("voice_1");
   const [aiVoiceSelection, setAiVoiceSelection] = useState("voice_1");
@@ -44,6 +48,16 @@ export default function PredatorDashboard() {
   const triggerConfetti = () => {
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 1500);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(getAuthInstance());
+      showToast("Logged out successfully");
+      navigate("/signUp");
+    } catch (error) {
+      showToast("Logout failed. Please try again.");
+    }
   };
 
   useEffect(() => {
@@ -180,12 +194,27 @@ export default function PredatorDashboard() {
           SELL PREDATOR Cockpit
         </span>
 
-        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-3 sm:mt-0 w-full sm:w-auto">
-          <button className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
+          <button 
+            onClick={() => navigate("/profile")}
+            className="cursor-pointer bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-2.5 rounded-xl shadow-lg hover:shadow-xl font-semibold w-full sm:w-auto transition-all duration-300 flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Profile
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="cursor-pointer bg-gradient-to-r from-[#FFD700] to-yellow-500 hover:from-yellow-400 hover:to-yellow-600 text-[#000000] px-6 py-2.5 rounded-xl shadow-lg hover:shadow-xl font-semibold w-full sm:w-auto transition-all duration-300 flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             Logout
           </button>
-          <span className="text-sm sm:text-base text-center sm:text-left w-full sm:w-auto" style={openSansStyle}>
-            Status: <span className="font-semibold">Free Version</span>
+          <span className="text-sm sm:text-base text-center sm:text-left w-full sm:w-auto px-4 py-2 bg-gray-100 rounded-lg" style={openSansStyle}>
+            Status: <span className="font-semibold text-green-600">Free Version</span>
           </span>
         </div>
       </div>

@@ -10,6 +10,7 @@ import TermsPage from './pages/LandingPages/TermsPage';
 import PredatorDashboard from './pages/Cockpit/PredatorDashboard';
 import AdminDashboard from './pages/Dashboard/AdminDashboard';
 import AdminUsers from './pages/Dashboard/AdminUsers';
+import ProfileCover from './components/ProfileCover';
 function App() {
   return (
     <Routes>
@@ -22,6 +23,7 @@ function App() {
       <Route path="/predatordashboard" element={<PredatorDashboard />} />
       <Route path="/AdminDashboard" element={<AdminDashboard />} />
       <Route path="/AdminUsers" element={<AdminUsers />} />
+      <Route path="/profile" element={<ProfileCover />} />
 
 
 

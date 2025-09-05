@@ -56,3 +56,4 @@ const Timer = ({ seconds, onExpire, onReset }) => {
 
 export default Timer;
 
+

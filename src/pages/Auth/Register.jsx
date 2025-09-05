@@ -49,7 +49,7 @@ export default function SignUp() {
         const result = await getRedirectResult(auth);
         if (result && result.user) {
           const token = await getIdToken(result.user, true);
-          const apiBase = import.meta.env.VITE_API_BASE_URL || "https://selltronai-serverside.onrender.com";
+          const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
           let who = { role: "user" };
           try {
             const res = await fetch(`${apiBase}/api/auth/whoami`, {
@@ -135,7 +135,7 @@ export default function SignUp() {
 
       // Assign admin role for specific email (demo)
       if (formData.email === "admin@gmail.com") {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "https://selltronai-serverside.onrender.com";
+        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
         await fetch(`${apiBase}/api/auth/assign-role`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -145,7 +145,7 @@ export default function SignUp() {
 
       // Get token and determine role
       const token = await getIdToken(cred.user, true);
-      const apiBase = import.meta.env.VITE_API_BASE_URL || "https://selltronai-serverside.onrender.com";
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       let who = { role: "user" };
       try {
         const res = await fetch(`${apiBase}/api/auth/whoami`, {
@@ -206,7 +206,7 @@ export default function SignUp() {
       try {
         const cred = await signInWithPopup(auth, provider);
         if (cred.user?.email === "admin@gmail.com") {
-          const apiBase = import.meta.env.VITE_API_BASE_URL || "https://selltronai-serverside.onrender.com";
+          const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
           await fetch(`${apiBase}/api/auth/assign-role`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -214,7 +214,7 @@ export default function SignUp() {
           });
         }
         const token = await getIdToken(cred.user, true);
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "https://selltronai-serverside.onrender.com";
+        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
         let who = { role: "user" };
         try {
           const res = await fetch(`${apiBase}/api/auth/whoami`, {

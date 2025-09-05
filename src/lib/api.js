@@ -6,7 +6,7 @@
  * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://selltronai-serverside.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 // --- Helper: JSON POST ---
 async function postJson(path, body) {
