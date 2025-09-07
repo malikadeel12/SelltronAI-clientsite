@@ -11,6 +11,7 @@ import PredatorDashboard from './pages/Cockpit/PredatorDashboard';
 import AdminDashboard from './pages/Dashboard/AdminDashboard';
 import AdminUsers from './pages/Dashboard/AdminUsers';
 import ProfileCover from './components/ProfileCover';
+import ProtectedRoute from './components/ProtectedRoute';
 function App() {
   return (
     <Routes>
@@ -20,15 +21,37 @@ function App() {
       <Route path="/contactpage" element={<ContactPage />} />
       <Route path="/aboutpage" element={<AboutPage />} />
       <Route path="/termspage" element={<TermsPage />} />
-      <Route path="/predatordashboard" element={<PredatorDashboard />} />
-      <Route path="/AdminDashboard" element={<AdminDashboard />} />
-      <Route path="/AdminUsers" element={<AdminUsers />} />
-      <Route path="/profile" element={<ProfileCover />} />
-
-
-
+      
+      {/* Auth Routes */}
       <Route path="/signUp" element={<SignUp />} />
       <Route path="/login" element={<Login />} />
+      
+      {/* Protected Routes */}
+      <Route path="/predatordashboard" element={
+        <ProtectedRoute>
+          <PredatorDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <PredatorDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/AdminDashboard" element={
+        <ProtectedRoute>
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/AdminUsers" element={
+        <ProtectedRoute>
+          <AdminUsers />
+        </ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <ProfileCover />
+        </ProtectedRoute>
+      } />
      
 
     </Routes>

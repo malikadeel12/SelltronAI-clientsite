@@ -10,10 +10,12 @@
 // We use modular v9+ SDK for tree-shaking and better DX.
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // --- Internal State ---
 // Hold a singleton auth instance; created upon first access.
 let cachedAuthInstance = null;
+let cachedDbInstance = null;
 
 // --- Helper: Build Firebase Config From Vite Env ---
 // NOTE: Values are read from Vite's `import.meta.env` at runtime. Make sure to define them in `.env.local`.
@@ -57,6 +59,23 @@ export function getAuthInstance() {
   cachedAuthInstance = getAuth(app);
   return cachedAuthInstance;
 }
+
+// --- Public API: getDbInstance ---
+// Lazily initializes the Firebase app and returns the Firestore instance.
+export function getDbInstance() {
+  // Early return if we already created it.
+  if (cachedDbInstance) {
+    return cachedDbInstance;
+  }
+
+  // Initialize the app once, re-use on subsequent calls.
+  const app = getApps().length > 0 ? getApp() : initializeApp(getFirebaseConfigFromEnv());
+  cachedDbInstance = getFirestore(app);
+  return cachedDbInstance;
+}
+
+// Export db for backward compatibility
+export const db = getDbInstance();
 
 // NOTE: Intentionally NOT exporting a static `auth` at module import-time to avoid crashing
 // when env isn't ready during build/dev. Call `getAuthInstance()` where needed.

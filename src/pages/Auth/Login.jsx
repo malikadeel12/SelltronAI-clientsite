@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import logo from "../../assets/mainlogo/logoicon.png";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { signInWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
 
@@ -24,10 +24,21 @@ const openSansStyle = {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Check for message from navigation state
+  React.useEffect(() => {
+    if (location.state?.message) {
+      setError(location.state.message);
+    }
+    if (location.state?.email) {
+      setFormData(prev => ({ ...prev, email: location.state.email }));
+    }
+  }, [location.state]);
   const [forgotPasswordMessage, setForgotPasswordMessage] = useState("");
   // Handle redirect result if popup is blocked
   React.useEffect(() => {
@@ -86,6 +97,13 @@ export default function Login() {
         formData.password
       );
 
+      // Check if email is verified
+      if (!cred.user.emailVerified) {
+        setError("Please verify your email before logging in. Your email verification is pending.");
+        // Don't redirect, just show error message
+        return;
+      }
+
       // --- Resolve role from backend using ID token ---
       const token = await getIdToken(cred.user, true);
       const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -106,7 +124,7 @@ export default function Login() {
       if (who.role === "admin") {
         navigate("/AdminDashboard");
       } else {
-        navigate("/predatordashboard");
+        navigate("/dashboard");
       }
     } catch (e) {
       setError(e?.message || "Login failed. Please try again.");

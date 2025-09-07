@@ -6,8 +6,8 @@
  * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
  */
 
+//const API_BASE = "http://localhost:8000"; // Force localhost for debugging
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-
 // --- Helper: JSON POST ---
 async function postJson(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -15,7 +15,17 @@ async function postJson(path, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  
+  if (!res.ok) {
+    // Try to get error message from response
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.error || `Request failed: ${res.status}`);
+    } catch (parseError) {
+      throw new Error(`Request failed: ${res.status}`);
+    }
+  }
+  
   return res.json();
 }
 
@@ -36,12 +46,23 @@ export async function fetchVoiceConfig() {
 }
 
 export async function runVoicePipeline({ audioBlob, mode, voice, language }) {
+  console.log("🌐 API: Starting voice pipeline call...");
   const form = new FormData();
   if (audioBlob) form.append("audio", audioBlob, "audio.webm");
   if (mode) form.append("mode", mode);
-  if (voice) form.append("voice", mode);
+  if (voice) form.append("voice", voice);
   if (language) form.append("language", language);
-  return postForm(`/api/voice/pipeline`, form);
+  
+  console.log("🌐 API: Sending request to /api/voice/pipeline with:", {
+    audioSize: audioBlob?.size,
+    mode,
+    voice,
+    language
+  });
+  
+  const result = await postForm(`/api/voice/pipeline`, form);
+  console.log("🌐 API: Voice pipeline response received:", result);
+  return result;
 }
 
 export async function runStt({ audioBlob, language }) {
@@ -60,12 +81,20 @@ export async function runTts({ text, voice }) {
 }
 
 // --- Email Verification APIs ---
+export async function checkEmailExists(email) {
+  return postJson(`/api/auth/check-email`, { email });
+}
+
 export async function sendVerificationCode(email) {
   return postJson(`/api/auth/send-verification`, { email });
 }
 
 export async function verifyEmailCode(email, code) {
   return postJson(`/api/auth/verify-email`, { email, code });
+}
+
+export async function setEmailVerified(uid) {
+  return postJson(`/api/auth/set-email-verified`, { uid });
 }
 
 

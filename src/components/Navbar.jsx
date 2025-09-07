@@ -71,7 +71,7 @@ export default function Navbar() {
           <li><Link to="/termspage" className="hover:text-[#FFD700]">Privacy Policy</Link></li>
         </ul>
 
-        {/* Desktop Button */}
+        {/* Desktop Buttons */}
         {user ? (
           <button
             onClick={handleLogout}
@@ -80,12 +80,20 @@ export default function Navbar() {
             Logout
           </button>
         ) : (
-          <Link
-            to="/signUp"
-            className="hidden md:block bg-[#FFD700] text-[#000000] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700]"
-          >
-            Sign Up
-          </Link>
+          <div className="hidden md:flex space-x-3">
+            <Link
+              to="/login"
+              className="bg-transparent border border-[#FFD700] text-[#FFD700] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700] hover:text-[#000000] transition-colors"
+            >
+              Login
+            </Link>
+            <Link
+              to="/signUp"
+              className="bg-[#FFD700] text-[#000000] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700] transition-colors"
+            >
+              Sign Up
+            </Link>
+          </div>
         )}
 
         {/* Mobile Menu Button */}
@@ -111,7 +119,7 @@ export default function Navbar() {
             <li><Link to="/aboutpage" className="hover:text-[#FFD700]" onClick={() => setMenuOpen(false)}>About Us</Link></li>
             <li><Link to="/termspage" className="hover:text-[#FFD700]" onClick={() => setMenuOpen(false)}>Privacy Policy</Link></li>
           </ul>
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-4 space-y-3">
             {user ? (
               <button
                 onClick={handleLogout}
@@ -120,13 +128,22 @@ export default function Navbar() {
                 Logout
               </button>
             ) : (
-              <Link
-                to="/signUp"
-                className="w-full block text-center bg-[#FFD700] text-[#000000] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700]"
-                onClick={() => setMenuOpen(false)}
-              >
-                Sign Up
-              </Link>
+              <>
+                <Link
+                  to="/login"
+                  className="w-full block text-center bg-transparent border border-[#FFD700] text-[#FFD700] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700] hover:text-[#000000] transition-colors"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/signUp"
+                  className="w-full block text-center bg-[#FFD700] text-[#000000] px-4 py-2 rounded-full font-medium hover:bg-[#FFD700]"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Sign Up
+                </Link>
+              </>
             )}
           </div>
         </div>

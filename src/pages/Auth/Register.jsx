@@ -3,7 +3,7 @@ import logo from "../../assets/mainlogo/logoicon.png";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { sendVerificationCode, verifyEmailCode } from "../../lib/api";
+import { checkEmailExists, sendVerificationCode, verifyEmailCode, setEmailVerified } from "../../lib/api";
 import Timer from "../../components/Timer";
 
 /**
@@ -40,6 +40,7 @@ export default function SignUp() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [timerExpired, setTimerExpired] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   // Handle redirect result after Google redirect sign-in
   React.useEffect(() => {
@@ -104,12 +105,25 @@ export default function SignUp() {
     setError("");
 
     try {
+      console.log("🔍 Checking if email already exists...");
+      // First check if email already exists
+      await checkEmailExists(formData.email);
+      console.log("✅ Email is available");
+      
+      // If email is available, send verification code
+      console.log("📧 Sending verification code...");
       await sendVerificationCode(formData.email);
+      console.log("✅ Verification code sent successfully");
       setStep("verification");
       setTimerExpired(false);
     } catch (e) {
-      console.error("Signup error:", e);
-      setError(e?.message || "Failed to send verification code. Please try again.");
+      console.error("❌ Signup error:", e);
+      // Check if it's an email already exists error
+      if (e?.message && (e.message.includes("Email already in use") || e.message.includes("already exists"))) {
+        setError("Email already exists! Please use a different email or try logging in.");
+      } else {
+        setError(e?.message || "Failed to send verification code. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -125,20 +139,38 @@ export default function SignUp() {
     setError("");
 
     try {
+      console.log("🔍 Starting OTP verification...");
       await verifyEmailCode(formData.email, verificationCode);
+      console.log("✅ OTP verified successfully");
       
       // Code verified, now create the account
+      console.log("🔍 Creating Firebase account...");
       const cred = await createUserWithEmailAndPassword(
         getAuthInstance(),
         formData.email,
         formData.password
       );
+      console.log("✅ Firebase account created:", cred.user.uid);
 
       // Update user profile with name
       if (formData.name) {
         await updateProfile(cred.user, {
           displayName: formData.name
         });
+      }
+
+      // Set Firebase emailVerified to true after successful OTP verification
+      try {
+        console.log("🔍 Setting Firebase emailVerified to true...");
+        await setEmailVerified(cred.user.uid);
+        console.log("✅ Firebase emailVerified set to true");
+        
+        // Refresh the user object to get updated emailVerified status
+        await cred.user.reload();
+        console.log("✅ User object refreshed, emailVerified:", cred.user.emailVerified);
+      } catch (emailVerifiedError) {
+        console.error("❌ Failed to set emailVerified:", emailVerifiedError);
+        // Don't block the flow if this fails, just log it
       }
 
       // Assign admin role for specific email (demo)
@@ -166,15 +198,23 @@ export default function SignUp() {
         who = { role: "user" };
       }
 
-      // Redirect based on role
-      if (who.role === "admin") {
-        navigate("/AdminDashboard");
-      } else {
-        navigate("/predatordashboard");
-      }
+      // Show success message
+      console.log("🎉 All steps completed successfully!");
+      setSuccess(true);
+      setLoading(false);
+      
+      // Redirect based on role after a short delay
+      setTimeout(() => {
+        console.log("🚀 Redirecting to dashboard...");
+        if (who.role === "admin") {
+          navigate("/AdminDashboard");
+        } else {
+          navigate("/predatordashboard");
+        }
+      }, 2000); // Increased delay to ensure user object is updated
     } catch (e) {
+      console.error("Verification error:", e);
       setError(e?.message || "Verification failed. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -201,6 +241,7 @@ export default function SignUp() {
     setVerificationCode("");
     setError("");
     setTimerExpired(false);
+    setSuccess(false);
   };
 
   // Google Sign-Up/Login (same flow)
@@ -298,13 +339,18 @@ export default function SignUp() {
             </div>
 
             {error && <p className="text-[#D72638] text-xs mt-2 mb-3">{error}</p>}
+            {success && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                <p className="text-sm">✅ Account created successfully! Redirecting to dashboard...</p>
+              </div>
+            )}
 
             <button
               onClick={handleVerifyCode}
-              disabled={loading || timerExpired}
+              disabled={loading || timerExpired || success}
               className="w-full bg-[#FFD700] text-[#000000] font-medium py-2 rounded-full text-sm hover:bg-[#FFD700] transition mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {loading ? "Verifying..." : "Verify & Create Account"}
+              {loading ? "Verifying..." : success ? "✅ Success!" : "Verify & Create Account"}
             </button>
 
             <button

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile } from "firebase/auth";
 import { getAuthInstance } from "../lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -15,7 +17,10 @@ const openSansStyle = {
 export default function ProfileCover() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [showPhoneEdit, setShowPhoneEdit] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -26,9 +31,33 @@ export default function ProfileCover() {
 
   useEffect(() => {
     const auth = getAuthInstance();
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setUser(user);
+        // Load user data from Firestore
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setUserData(data);
+            setPhoneNumber(data.phoneNumber || "");
+          } else {
+            // Create user document if it doesn't exist
+            const userDoc = {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || '',
+              phoneNumber: '',
+              createdAt: new Date(),
+              emailVerified: user.emailVerified
+            };
+            await setDoc(doc(db, 'users', user.uid), userDoc);
+            setUserData(userDoc);
+            setPhoneNumber('');
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
       } else {
         navigate("/signUp");
       }
@@ -43,6 +72,42 @@ export default function ProfileCover() {
       navigate("/signUp");
     } catch (error) {
       setError("Logout failed. Please try again.");
+    }
+  };
+
+  const handlePhoneUpdate = async (e) => {
+    e.preventDefault();
+    if (!phoneNumber.trim()) {
+      setError("Phone number cannot be empty.");
+      return;
+    }
+
+    // Basic phone number validation
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    if (!phoneRegex.test(phoneNumber.replace(/\s/g, ''))) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccess("");
+      
+      // Update phone number in Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        phoneNumber: phoneNumber.trim()
+      }, { merge: true });
+
+      // Update local state
+      setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
+      setShowPhoneEdit(false);
+      setSuccess("Phone number updated successfully!");
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (error) {
+      console.error('Error updating phone number:', error);
+      setError("Failed to update phone number. Please try again.");
     }
   };
 
@@ -173,18 +238,54 @@ export default function ProfileCover() {
             </div>
 
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-emerald-600 p-4 sm:p-6">
-              <div className="flex items-center mb-3 sm:mb-4">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Phone</h3>
                 </div>
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Phone</h3>
+                <button
+                  onClick={() => setShowPhoneEdit(!showPhoneEdit)}
+                  className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                >
+                  {showPhoneEdit ? "Cancel" : "Edit"}
+                </button>
               </div>
               <p className="text-gray-500 text-xs sm:text-sm mb-1">Contact</p>
-              <p className="text-sm sm:text-lg font-semibold text-gray-900">
-                {user.phoneNumber || "Add phone number in account settings"}
-              </p>
+              
+              {showPhoneEdit ? (
+                <form onSubmit={handlePhoneUpdate} className="space-y-3">
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="Enter phone number"
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      type="submit"
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPhoneEdit(false)}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-sm sm:text-lg font-semibold text-gray-900">
+                  {userData?.phoneNumber || "Add phone number"}
+                </p>
+              )}
             </div>
 
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-amber-600 p-4 sm:p-6">

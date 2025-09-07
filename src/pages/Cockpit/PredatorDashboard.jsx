@@ -24,8 +24,8 @@ const openSansStyle = {
 export default function PredatorDashboard() {
   const navigate = useNavigate();
   const [language, setLanguage] = useState("English");
-  const [voice, setVoice] = useState("voice_1");
-  const [aiVoiceSelection, setAiVoiceSelection] = useState("voice_1");
+  const [voice, setVoice] = useState("en-US-Wavenet-D");
+  const [aiVoiceSelection, setAiVoiceSelection] = useState("en-US-Wavenet-D");
   const [speechActive, setSpeechActive] = useState(true);
   const [transcript, setTranscript] = useState("");
   const [highlights, setHighlights] = useState("");
@@ -61,28 +61,69 @@ export default function PredatorDashboard() {
   };
 
   useEffect(() => {
-    // Load available voices/modes from backend (dummy for now)
+    // Load available voices/modes from backend
     fetchVoiceConfig()
       .then((cfg) => {
-        setVoices(cfg.voices || []);
+        const fetchedVoices = cfg.voices || [];
+        setVoices(fetchedVoices);
+        // If current selection is invalid, set to the first valid voice
+        const current = aiVoiceSelection;
+        const isValid = fetchedVoices.some(v => v.id === current);
+        if (!isValid && fetchedVoices.length > 0) {
+          const firstId = fetchedVoices[0].id;
+          setAiVoiceSelection(firstId);
+          setVoice(firstId);
+        }
       })
       .catch(() => {});
   }, []);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      console.log("🎤 Requesting microphone access...");
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000
+        } 
+      });
+      console.log("🎤 Microphone access granted, stream:", stream);
+      
+      // Check if MediaRecorder supports webm
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
+      console.log("🎤 Using MIME type:", mimeType);
+      
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       recordedChunksRef.current = [];
+      
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+        console.log("🎤 Audio data available:", e.data.size, "bytes");
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+          console.log("🎤 Chunks recorded:", recordedChunksRef.current.length);
+        }
       };
-      mediaRecorder.onstart = () => setRecording(true);
-      mediaRecorder.onstop = () => setRecording(false);
+      
+      mediaRecorder.onstart = () => {
+        console.log("🎤 MediaRecorder started");
+        setRecording(true);
+      };
+      
+      mediaRecorder.onstop = () => {
+        console.log("🎤 MediaRecorder stopped");
+        setRecording(false);
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Collect data every 100ms
       showToast("Recording started");
     } catch (e) {
+      console.error("❌ Microphone error:", e);
       showToast("Mic permission denied");
     }
   };
@@ -90,33 +131,92 @@ export default function PredatorDashboard() {
   const stopRecording = () => {
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== "inactive") {
+      console.log("🛑 Stopping MediaRecorder...");
       rec.stop();
-      rec.stream.getTracks().forEach((t) => t.stop());
+      // Stream tracks are already stopped in onstop event
     }
   };
 
   const handleStart = async () => {
+    console.log("🎤 Starting voice recording...");
     await startRecording();
     setTranscript("Listening...");
+    console.log("🎤 Voice recording started successfully");
   };
 
   const handleStop = async () => {
+    console.log("🛑 Stopping voice recording...");
     stopRecording();
     showToast("Processing...");
     try {
+      // Wait a bit for the last audio data to be collected
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
-      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de" : "en" });
+      console.log("📦 Audio blob created:", {
+        size: blob.size,
+        type: blob.type,
+        chunks: recordedChunksRef.current.length
+      });
+      
+      // Check if we have audio data
+      if (blob.size === 0) {
+        console.error("❌ No audio data recorded!");
+        showToast("No audio recorded. Please try again.");
+        return;
+      }
+      
+      console.log("🚀 Starting voice pipeline with params:", {
+        mode,
+        voice,
+        language: language === "German" ? "de-US" : "en-US"
+      });
+      
+      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de-US" : "en-US" });
+      
+      console.log("📝 Voice pipeline result:", result);
+      console.log("🎯 STT Transcript:", result.transcript);
+      console.log("🤖 GPT Response:", result.responseText);
+      console.log("🔊 TTS Audio URL:", result.audioUrl ? "Available" : "Not available");
+      
+      // Check if STT failed and use browser fallback
+      if (result.transcript && result.transcript.includes("Google Cloud Speech-to-Text is not configured")) {
+        console.log("🔄 STT failed, using browser Speech Recognition...");
+        await handleBrowserSTT(blob);
+        return;
+      }
+      
       setTranscript(result.transcript || "");
       setPredatorAnswer(result.responseText || "");
-      // Use browser SpeechSynthesis for dummy TTS if enabled
+      
+      // Use real TTS audio if available, otherwise fallback to browser TTS
       if (speechActive && (result.responseText || predatorAnswer)) {
-        const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utter);
+        console.log("🔊 Playing audio response...");
+        if (result.audioUrl) {
+          console.log("🎵 Using Google Cloud TTS audio");
+          // Play real TTS audio from Google Cloud
+          const audio = new Audio(result.audioUrl);
+          audio.play().catch(e => {
+            console.error("❌ TTS audio playback failed:", e);
+            console.log("🔄 Falling back to browser TTS");
+            // Fallback to browser TTS
+            const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
+          });
+        } else {
+          console.log("🔄 Using browser TTS (no Google Cloud audio)");
+          // Fallback to browser TTS
+          const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        }
       }
+      console.log("✅ Voice pipeline completed successfully!");
       triggerConfetti();
       showToast("Ready");
     } catch (e) {
+      console.error("❌ Voice pipeline failed:", e);
       showToast("Pipeline failed");
     }
   };
@@ -129,6 +229,64 @@ export default function PredatorDashboard() {
     }
   };
 
+  const handleBrowserSTT = async (blob) => {
+    console.log("🎤 Using browser Speech Recognition...");
+    showToast("Using browser speech recognition...");
+    
+    try {
+      // Create audio element and play it for browser STT
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      
+      // Use Web Speech API for transcription
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = language === "German" ? "de-DE" : "en-US";
+        
+        recognition.onresult = async (event) => {
+          const transcript = event.results[0][0].transcript;
+          console.log("🎯 Browser STT result:", transcript);
+          setTranscript(transcript);
+          
+          // Get GPT response
+          try {
+            const { responseText } = await runGpt({ transcript, mode });
+            setPredatorAnswer(responseText);
+            
+            // Play TTS response
+            if (speechActive && responseText) {
+              const utter = new SpeechSynthesisUtterance(responseText);
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(utter);
+            }
+            
+            triggerConfetti();
+            showToast("Ready");
+          } catch (error) {
+            console.error("GPT Error:", error);
+            showToast("GPT failed");
+          }
+        };
+        
+        recognition.onerror = (event) => {
+          console.error("Browser STT Error:", event.error);
+          showToast("Speech recognition failed");
+        };
+        
+        recognition.start();
+      } else {
+        showToast("Speech recognition not supported");
+      }
+    } catch (error) {
+      console.error("Browser STT Error:", error);
+      showToast("Speech recognition failed");
+    }
+  };
+
   const handleTranscribe = async () => {
     if (!recordedChunksRef.current.length) {
       showToast("No audio recorded");
@@ -138,8 +296,8 @@ export default function PredatorDashboard() {
     showToast("Transcribing...");
     try {
       const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
-      const { transcript: t } = await runStt({ audioBlob: blob, language: language === "German" ? "de" : "en" });
-      setHighlights(`Highlights (dummy): ${t}`);
+      const { transcript: t } = await runStt({ audioBlob: blob, language: language === "German" ? "de-US" : "en-US" });
+      setHighlights(`Transcription: ${t}`);
     } catch (e) {
       showToast("STT failed");
     } finally {
@@ -152,10 +310,33 @@ export default function PredatorDashboard() {
     try {
       const { responseText } = await runGpt({ transcript: askText, mode });
       setPredatorAnswer(responseText);
-      if (speechActive) {
-        const utter = new SpeechSynthesisUtterance(responseText);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utter);
+      
+      if (speechActive && responseText) {
+        // Try to get TTS audio for the response
+        try {
+          const ttsResult = await runTts({ text: responseText, voice });
+          if (ttsResult.audioUrl) {
+            const audio = new Audio(ttsResult.audioUrl);
+            audio.play().catch(e => {
+              console.error("TTS audio playback failed:", e);
+              // Fallback to browser TTS
+              const utter = new SpeechSynthesisUtterance(responseText);
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(utter);
+            });
+          } else {
+            // Fallback to browser TTS
+            const utter = new SpeechSynthesisUtterance(responseText);
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
+          }
+        } catch (ttsError) {
+          console.error("TTS failed:", ttsError);
+          // Fallback to browser TTS
+          const utter = new SpeechSynthesisUtterance(responseText);
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        }
       }
       triggerConfetti();
       setAskText("");
