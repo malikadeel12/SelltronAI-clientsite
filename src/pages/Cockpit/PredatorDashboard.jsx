@@ -4,7 +4,7 @@
 // - Why: Implements Voice → GPT → Voice flow with replaceable backend providers.
 // - Related: `client/src/lib/api.js`, `server/src/routes/voice.js`, `server/src/index.js`.
 // - TODO: Replace dummy pipeline with Google STT/TTS and GPT-4 providers.
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
@@ -37,6 +37,18 @@ export default function PredatorDashboard() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState("sales");
   const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
+  // STT accuracy tuners
+  const sttModel = 'latest_long';
+  const sttBoost = 16; // 10-20 is common
+  const defaultHints = useMemo(() => ([
+    // Brand/Product terms (edit these for your domain)
+    'Selltron', 'Predator', 'Cockpit', 'dashboard',
+    // Sales/support phrases
+    'pricing', 'subscription', 'free trial', 'enterprise plan',
+    'customer support', 'technical issue', 'refund', 'upgrade', 'downgrade',
+    // Common names/terms
+    'Adeel', 'email', 'phone number', 'order number',
+  ]), []);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const mimeTypeRef = useRef('audio/webm;codecs=opus');
@@ -189,7 +201,16 @@ export default function PredatorDashboard() {
         language: language === "German" ? "de-US" : "en-US"
       });
       
-      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de-US" : "en-US", encoding: encodingRef.current });
+      const result = await runVoicePipeline({ 
+        audioBlob: blob, 
+        mode, 
+        voice, 
+        language: language === "German" ? "de-DE" : "en-US", 
+        encoding: encodingRef.current,
+        hints: defaultHints,
+        boost: sttBoost,
+        sttModel
+      });
       
       console.log("📝 Voice pipeline result:", result);
       console.log("🎯 STT Transcript:", result.transcript);
@@ -313,7 +334,14 @@ export default function PredatorDashboard() {
     showToast("Transcribing...");
     try {
       const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
-      const { transcript: t } = await runStt({ audioBlob: blob, language: language === "German" ? "de-US" : "en-US" });
+      const { transcript: t } = await runStt({ 
+        audioBlob: blob, 
+        language: language === "German" ? "de-DE" : "en-US",
+        encoding: encodingRef.current,
+        hints: defaultHints,
+        boost: sttBoost,
+        sttModel
+      });
       setHighlights(`Transcription: ${t}`);
     } catch (e) {
       showToast("STT failed");

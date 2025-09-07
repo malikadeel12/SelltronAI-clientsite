@@ -45,15 +45,20 @@ export async function fetchVoiceConfig() {
   return res.json();
 }
 
-export async function runVoicePipeline({ audioBlob, mode, voice, language }) {
+export async function runVoicePipeline({ audioBlob, mode, voice, language, encoding, hints, boost, sttModel }) {
   console.log("🌐 API: Starting voice pipeline call...");
   const form = new FormData();
   if (audioBlob) form.append("audio", audioBlob, "audio.webm");
   if (mode) form.append("mode", mode);
   if (voice) form.append("voice", voice);
   if (language) form.append("language", language);
-  // Optionally forward encoding if caller set form.encoding
-  if (arguments[0] && arguments[0].encoding) form.append("encoding", arguments[0].encoding);
+  if (encoding) form.append("encoding", encoding);
+  if (typeof hints !== 'undefined') {
+    if (Array.isArray(hints)) form.append("hints", JSON.stringify(hints));
+    else form.append("hints", String(hints));
+  }
+  if (typeof boost !== 'undefined') form.append("boost", String(boost));
+  if (typeof sttModel !== 'undefined') form.append("sttModel", sttModel);
   
   console.log("🌐 API: Sending request to /api/voice/pipeline with:", {
     audioSize: audioBlob?.size,
@@ -67,11 +72,17 @@ export async function runVoicePipeline({ audioBlob, mode, voice, language }) {
   return result;
 }
 
-export async function runStt({ audioBlob, language }) {
+export async function runStt({ audioBlob, language, encoding, hints, boost, sttModel }) {
   const form = new FormData();
   if (audioBlob) form.append("audio", audioBlob, "audio.webm");
   if (language) form.append("language", language);
-  if (arguments[0] && arguments[0].encoding) form.append("encoding", arguments[0].encoding);
+  if (encoding) form.append("encoding", encoding);
+  if (typeof hints !== 'undefined') {
+    if (Array.isArray(hints)) form.append("hints", JSON.stringify(hints));
+    else form.append("hints", String(hints));
+  }
+  if (typeof boost !== 'undefined') form.append("boost", String(boost));
+  if (typeof sttModel !== 'undefined') form.append("sttModel", sttModel);
   return postForm(`/api/voice/stt`, form);
 }
 
