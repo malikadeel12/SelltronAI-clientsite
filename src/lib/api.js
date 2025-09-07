@@ -6,8 +6,8 @@
  * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
  */
 
-//const API_BASE = "http://localhost:8000"; // Force localhost for debugging
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// Prefer env base URL in production; fallback to same-origin relative paths
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
 // --- Helper: JSON POST ---
 async function postJson(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -52,6 +52,8 @@ export async function runVoicePipeline({ audioBlob, mode, voice, language }) {
   if (mode) form.append("mode", mode);
   if (voice) form.append("voice", voice);
   if (language) form.append("language", language);
+  // Optionally forward encoding if caller set form.encoding
+  if (arguments[0] && arguments[0].encoding) form.append("encoding", arguments[0].encoding);
   
   console.log("🌐 API: Sending request to /api/voice/pipeline with:", {
     audioSize: audioBlob?.size,
@@ -69,6 +71,7 @@ export async function runStt({ audioBlob, language }) {
   const form = new FormData();
   if (audioBlob) form.append("audio", audioBlob, "audio.webm");
   if (language) form.append("language", language);
+  if (arguments[0] && arguments[0].encoding) form.append("encoding", arguments[0].encoding);
   return postForm(`/api/voice/stt`, form);
 }
 

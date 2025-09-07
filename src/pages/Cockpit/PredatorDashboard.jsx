@@ -39,6 +39,8 @@ export default function PredatorDashboard() {
   const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  const mimeTypeRef = useRef('audio/webm;codecs=opus');
+  const encodingRef = useRef('WEBM_OPUS');
 
   const showToast = (msg) => {
     setToast({ show: true, message: msg });
@@ -90,13 +92,28 @@ export default function PredatorDashboard() {
       });
       console.log("🎤 Microphone access granted, stream:", stream);
       
-      // Check if MediaRecorder supports webm
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
-        : 'audio/webm';
-      console.log("🎤 Using MIME type:", mimeType);
+      // Choose a MIME type supported by the current browser (mobile-friendly)
+      let mimeType = '';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mimeType = 'audio/ogg;codecs=opus';
+          encodingRef.current = 'OGG_OPUS';
+        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+          encodingRef.current = 'WEBM_OPUS';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+          encodingRef.current = 'WEBM_OPUS';
+        } else {
+          // As a last resort, allow browser to pick default; STT may not support some codecs
+          mimeType = '';
+          encodingRef.current = 'WEBM_OPUS';
+        }
+      }
+      mimeTypeRef.current = mimeType || 'audio/webm';
+      console.log("🎤 Using MIME type:", mimeTypeRef.current, " Encoding:", encodingRef.current);
       
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const mediaRecorder = new MediaRecorder(stream, mimeTypeRef.current ? { mimeType: mimeTypeRef.current } : undefined);
       recordedChunksRef.current = [];
       
       mediaRecorder.ondataavailable = (e) => {
@@ -149,10 +166,10 @@ export default function PredatorDashboard() {
     stopRecording();
     showToast("Processing...");
     try {
-      // Wait a bit for the last audio data to be collected
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait a bit longer on mobile for the last audio data to flush
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
+      const blob = new Blob(recordedChunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
       console.log("📦 Audio blob created:", {
         size: blob.size,
         type: blob.type,
@@ -172,7 +189,7 @@ export default function PredatorDashboard() {
         language: language === "German" ? "de-US" : "en-US"
       });
       
-      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de-US" : "en-US" });
+      const result = await runVoicePipeline({ audioBlob: blob, mode, voice, language: language === "German" ? "de-US" : "en-US", encoding: encodingRef.current });
       
       console.log("📝 Voice pipeline result:", result);
       console.log("🎯 STT Transcript:", result.transcript);
