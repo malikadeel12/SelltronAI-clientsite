@@ -21,6 +21,7 @@ export default function ProfileCover() {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showPhoneEdit, setShowPhoneEdit] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState("PK");
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -28,61 +29,115 @@ export default function ProfileCover() {
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState({ show: false, message: "" });
 
-  useEffect(() => {
-    const auth = getAuthInstance();
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        setUser(user);
-        // Load user data from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setUserData(data);
-            setPhoneNumber(data.phoneNumber || "");
-          } else {
-            // Create user document if it doesn't exist
-            const userDoc = {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName || '',
-              phoneNumber: '',
-              createdAt: new Date(),
-              emailVerified: user.emailVerified
-            };
-            await setDoc(doc(db, 'users', user.uid), userDoc);
-            setUserData(userDoc);
-            setPhoneNumber('');
-          }
-        } catch (error) {
-          console.error('Error loading user data:', error);
-        }
-      } else {
-        navigate("/signUp");
+  const showToast = (msg) => {
+    setToast({ show: true, message: msg });
+    setTimeout(() => setToast({ show: false, message: "" }), 3000);
+  };
+
+  // Country codes and prefixes
+  const countries = {
+    PK: { code: "PK", prefix: "+92", name: "Pakistan" },
+    US: { code: "US", prefix: "+1", name: "United States" },
+    IN: { code: "IN", prefix: "+91", name: "India" }
+  };
+
+  // Auto-detect country based on phone number
+  const detectCountryFromPhone = (phoneNumber) => {
+    const cleanPhone = phoneNumber.replace(/\s+/g, '');
+
+    if (/^(03|92|(\+92))/.test(cleanPhone)) {
+      return "PK";
+    }
+    if (/^(1|(\+1))/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) {
+      return "US";
+    }
+    if (/^(91|(\+91)|[6-9])/.test(cleanPhone)) {
+      return "IN";
+    }
+
+    return selectedCountry;
+  };
+
+  // Format phone number based on country
+  const formatPhoneNumber = (phone, country) => {
+    let cleanPhone = phone.replace(/[^\d]/g, '');
+    const countryData = countries[country];
+
+    if (!cleanPhone) return "";
+
+    // Remove country code if already present
+    if (country === "PK" && cleanPhone.startsWith("92")) {
+      cleanPhone = cleanPhone.substring(2);
+    } else if (country === "US" && cleanPhone.startsWith("1")) {
+      cleanPhone = cleanPhone.substring(1);
+    } else if (country === "IN" && cleanPhone.startsWith("91")) {
+      cleanPhone = cleanPhone.substring(2);
+    }
+
+    // Remove leading zero for Pakistan
+    if (country === "PK" && cleanPhone.startsWith("0")) {
+      cleanPhone = cleanPhone.substring(1);
+    }
+
+    // Format based on country
+    if (country === "PK") {
+      if (cleanPhone.length <= 10) {
+        return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
       }
-    });
+    } else if (country === "US") {
+      if (cleanPhone.length <= 10) {
+        const area = cleanPhone.substring(0, 3);
+        const first = cleanPhone.substring(3, 6);
+        const second = cleanPhone.substring(6, 10);
+        return `${countryData.prefix} ${area ? `(${area})` : ''} ${first} ${second}`.trim().replace(/\s+/g, ' ');
+      }
+    } else if (country === "IN") {
+      if (cleanPhone.length <= 10) {
+        return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
+      }
+    }
 
-    return () => unsubscribe();
-  }, [navigate]);
+    return `${countryData.prefix} ${cleanPhone}`;
+  };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(getAuthInstance());
-      navigate("/signUp");
-    } catch (error) {
-      setError("Logout failed. Please try again.");
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+
+    // Auto-detect country from phone number
+    const detectedCountry = detectCountryFromPhone(value);
+    if (detectedCountry !== selectedCountry) {
+      setSelectedCountry(detectedCountry);
+    }
+
+    // Format the phone number
+    const formattedPhone = formatPhoneNumber(value, detectedCountry);
+    setPhoneNumber(formattedPhone);
+  };
+
+  const handleCountryChange = (e) => {
+    const newCountry = e.target.value;
+    setSelectedCountry(newCountry);
+
+    // Reformat existing phone number with new country
+    if (phoneNumber) {
+      const formattedPhone = formatPhoneNumber(phoneNumber, newCountry);
+      setPhoneNumber(formattedPhone);
+    } else {
+      // Set country prefix if no phone number exists
+      setPhoneNumber(countries[newCountry].prefix + " ");
     }
   };
 
   const handlePhoneUpdate = async (e) => {
     e.preventDefault();
+
     if (!phoneNumber.trim()) {
       setError("Phone number cannot be empty.");
       return;
     }
 
-    // Basic phone number validation
     const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
     if (!phoneRegex.test(phoneNumber.replace(/\s/g, ''))) {
       setError("Please enter a valid phone number.");
@@ -92,22 +147,83 @@ export default function ProfileCover() {
     try {
       setError("");
       setSuccess("");
-      
-      // Update phone number in Firestore
+
+      // Try server API first
+      try {
+        const idToken = await user.getIdToken();
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+        const response =await fetch(`${API_BASE}/api/auth/update-profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            phoneNumber: phoneNumber.trim()
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Update local state
+          setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
+          setShowPhoneEdit(false);
+          setSuccess("Phone number updated successfully!");
+          showToast("Phone number updated successfully!");
+          setTimeout(() => setSuccess(""), 3000);
+          return;
+        }
+      } catch (serverError) {
+        console.log('Server API not available, falling back to Firestore:', serverError);
+      }
+
+      // Fallback to direct Firestore update
+      console.log('Saving phone number to Firestore:', phoneNumber.trim());
       await setDoc(doc(db, 'users', user.uid), {
-        phoneNumber: phoneNumber.trim()
+        phoneNumber: phoneNumber.trim(),
+        updatedAt: new Date()
       }, { merge: true });
 
-      // Update local state
-      setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
+      // Verify the save by reading back from Firestore
+      const updatedDoc = await getDoc(doc(db, 'users', user.uid));
+      if (updatedDoc.exists()) {
+        const savedData = updatedDoc.data();
+        console.log('Verified saved data:', savedData);
+        setUserData(savedData);
+        setPhoneNumber(savedData.phoneNumber || phoneNumber.trim());
+      } else {
+        // Update local state as fallback
+        setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
+      }
+
       setShowPhoneEdit(false);
       setSuccess("Phone number updated successfully!");
-      
+      showToast("Phone number updated successfully!");
+
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
       console.error('Error updating phone number:', error);
-      setError("Failed to update phone number. Please try again.");
+
+      let errorMessage = "Failed to update phone number. Please try again.";
+
+      if (error.code === 'permission-denied' || error.message.includes('permission')) {
+        errorMessage = "Permission denied. Please contact support to update your phone number.";
+      } else if (error.code === 'network-request-failed') {
+        errorMessage = "Network error. Please check your connection and try again.";
+      }
+
+      setError(errorMessage);
+      showToast(errorMessage);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(getAuthInstance());
+      navigate("/signUp");
+    } catch (error) {
+      setError("Logout failed. Please try again.");
     }
   };
 
@@ -139,17 +255,18 @@ export default function ProfileCover() {
     try {
       const auth = getAuthInstance();
       const user = auth.currentUser;
-      
+
       // Re-authenticate user with current password
       const credential = EmailAuthProvider.credential(user.email, passwordData.currentPassword);
       await reauthenticateWithCredential(user, credential);
-      
+
       // Update password
       await updatePassword(user, passwordData.newPassword);
-      
+
       setSuccess("Password changed successfully!");
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setShowPasswordChange(false);
+      showToast("Password changed successfully!");
     } catch (error) {
       if (error.code === "auth/wrong-password") {
         setError("Current password is incorrect.");
@@ -160,6 +277,48 @@ export default function ProfileCover() {
       }
     }
   };
+
+  useEffect(() => {
+    const auth = getAuthInstance();
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        setUser(user);
+
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setUserData(data);
+
+            // ✅ Firestore ka phoneNumber state me set karo
+            if (data.phoneNumber) {
+              setPhoneNumber(data.phoneNumber);
+            }
+          } else {
+            // Agar Firestore me user document nahi hai to create kar do
+            const newUserDoc = {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || '',
+              phoneNumber: '', // pehle empty rakho
+              createdAt: new Date(),
+              emailVerified: user.emailVerified,
+            };
+            await setDoc(doc(db, 'users', user.uid), newUserDoc, { merge: true });
+            setUserData(newUserDoc);
+            setPhoneNumber('');
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
+      } else {
+        navigate("/signUp");
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
 
   if (!user) {
     return (
@@ -206,7 +365,7 @@ export default function ProfileCover() {
               </div>
             </div>
           </div>
-          
+
           {/* User Info Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-slate-600 p-4 sm:p-6">
@@ -255,16 +414,27 @@ export default function ProfileCover() {
                 </button>
               </div>
               <p className="text-gray-500 text-xs sm:text-sm mb-1">Contact</p>
-              
+
               {showPhoneEdit ? (
                 <form onSubmit={handlePhoneUpdate} className="space-y-3">
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Enter phone number"
-                  />
+                  <div className="flex items-center">
+                    <select
+                      value={selectedCountry}
+                      onChange={handleCountryChange}
+                      className="w-20 border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-300 text-sm"
+                    >
+                      {Object.keys(countries).map((country) => (
+                        <option key={country} value={country}>{countries[country].name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={handlePhoneChange}
+                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-300 text-sm"
+                      placeholder="Enter phone number"
+                    />
+                  </div>
                   <div className="flex space-x-2">
                     <button
                       type="submit"
@@ -388,7 +558,7 @@ export default function ProfileCover() {
                       </div>
                     </div>
                   )}
-                  
+
                   {success && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg sm:rounded-xl p-3 sm:p-4">
                       <div className="flex items-center">
@@ -438,6 +608,16 @@ export default function ProfileCover() {
           </div>
         </div>
       </div>
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <div className="flex items-center">
+            <svg className="w-4 h-4 mr-2 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-emerald-700 font-medium text-sm">{toast.message}</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

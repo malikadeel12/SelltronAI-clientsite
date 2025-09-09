@@ -9,7 +9,8 @@ import { getAuthInstance } from "../../lib/firebase";
  * - Created Login page with email and password fields.
  * - Mirrors the style of the existing signup page for UX consistency.
  * - Uses localStorage for demo auth parity until backend is wired.
- * Why: Project requires a dedicated login screen with basic validation.
+ * - Added toast notifications for better user feedback during login process.
+ * Why: Project requires a dedicated login screen with basic validation and user feedback.
  * Dependencies/Related: Will be replaced by server-side auth in `server/`.
  */
 
@@ -29,6 +30,12 @@ export default function Login() {
   const [error, setError] = useState("");
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "" });
+
+  const showToast = (msg) => {
+    setToast({ show: true, message: msg });
+    setTimeout(() => setToast({ show: false, message: "" }), 3000);
+  };
 
   // Check for message from navigation state
   React.useEffect(() => {
@@ -73,6 +80,7 @@ export default function Login() {
     // --- Validation Step ---
     if (!formData.email || !formData.password) {
       setError("Email and Password are required!");
+      showToast("Please fill in all required fields");
       return;
     }
     
@@ -80,16 +88,20 @@ export default function Login() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError("Please enter a valid email address!");
+      showToast("Invalid email format");
       return;
     }
     
     // Password length validation
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters long!");
+      showToast("Password too short");
       return;
     }
     
     try {
+      showToast("Logging in...");
+      
       // --- Firebase email/password sign-in ---
       const cred = await signInWithEmailAndPassword(
         getAuthInstance(),
@@ -100,9 +112,12 @@ export default function Login() {
       // Check if email is verified
       if (!cred.user.emailVerified) {
         setError("Please verify your email before logging in. Your email verification is pending.");
+        showToast("Email verification required");
         // Don't redirect, just show error message
         return;
       }
+
+      showToast("Checking user role...");
 
       // --- Resolve role from backend using ID token ---
       const token = await getIdToken(cred.user, true);
@@ -121,31 +136,64 @@ export default function Login() {
       }
 
       setError("");
-      if (who.role === "admin") {
-        navigate("/AdminDashboard");
-      } else {
-        navigate("/dashboard");
-      }
+      showToast("Login successful! Redirecting to Predator Dashboard...");
+      
+      setTimeout(() => {
+        if (who.role === "admin") {
+          navigate("/AdminDashboard");
+        } else {
+          navigate("/predatordashboard");
+        }
+      }, 1000);
     } catch (e) {
-      setError(e?.message || "Login failed. Please try again.");
+      console.error("Login error:", e);
+      
+      // Handle specific Firebase auth errors with user-friendly messages
+      let errorMessage = "Login failed. Please try again.";
+      let toastMessage = "Login failed";
+      
+      if (e.code === "auth/invalid-credential" || e.code === "auth/wrong-password" || e.code === "auth/user-not-found") {
+        errorMessage = "Invalid email or password. Please check your credentials and try again.";
+        toastMessage = "Invalid email or password";
+      } else if (e.code === "auth/invalid-email") {
+        errorMessage = "Please enter a valid email address.";
+        toastMessage = "Invalid email format";
+      } else if (e.code === "auth/user-disabled") {
+        errorMessage = "This account has been disabled. Please contact support.";
+        toastMessage = "Account disabled";
+      } else if (e.code === "auth/too-many-requests") {
+        errorMessage = "Too many failed login attempts. Please try again later.";
+        toastMessage = "Too many attempts, please wait";
+      } else if (e.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your internet connection.";
+        toastMessage = "Network error";
+      } else if (e.message) {
+        errorMessage = e.message;
+        toastMessage = "Login failed";
+      }
+      
+      setError(errorMessage);
+      showToast(toastMessage);
     }
   };
 
-  // --- Google Sign-In Flow ---
   const handleForgotPassword = async () => {
     if (!forgotPasswordEmail) {
       setForgotPasswordMessage("Please enter your email address.");
+      showToast("Email required for password reset");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(forgotPasswordEmail)) {
       setForgotPasswordMessage("Please enter a valid email address.");
+      showToast("Invalid email format");
       return;
     }
 
     try {
       setForgotPasswordMessage("Sending reset email...");
+      showToast("Sending password reset email...");
       
       // Configure email action code settings to improve deliverability
       const actionCodeSettings = {
@@ -156,26 +204,34 @@ export default function Login() {
       await sendPasswordResetEmail(getAuthInstance(), forgotPasswordEmail, actionCodeSettings);
       setForgotPasswordMessage("✅ Password reset email sent successfully! Please check your inbox and spam/junk folder. If you don't see it, please add noreply@firebaseapp.com to your contacts and check again. The email may take 2-5 minutes to arrive.");
       setForgotPasswordEmail("");
+      showToast("Password reset email sent!");
     } catch (error) {
       console.error("Password reset error:", error);
       
       // Handle specific Firebase errors
       if (error.code === "auth/user-not-found") {
         setForgotPasswordMessage("❌ No account found with this email address. Please check your email or sign up for a new account.");
+        showToast("No account found with this email");
       } else if (error.code === "auth/invalid-email") {
         setForgotPasswordMessage("❌ Please enter a valid email address.");
+        showToast("Invalid email address");
       } else if (error.code === "auth/too-many-requests") {
         setForgotPasswordMessage("❌ Too many requests. Please wait a few minutes before trying again.");
+        showToast("Too many requests, please wait");
       } else if (error.code === "auth/network-request-failed") {
         setForgotPasswordMessage("❌ Network error. Please check your internet connection and try again.");
+        showToast("Network error");
       } else {
         setForgotPasswordMessage(`❌ Failed to send reset email: ${error.message || "Please try again."}`);
+        showToast("Failed to send reset email");
       }
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
+      showToast("Signing in with Google...");
+      
       const auth = getAuthInstance();
       await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
@@ -191,6 +247,8 @@ export default function Login() {
           });
         }
         
+        showToast("Google sign-in successful! Checking role...");
+        
         const token = await getIdToken(cred.user, true);
         const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
         let who = { role: "user" };
@@ -200,12 +258,18 @@ export default function Login() {
           });
           if (res.ok) who = await res.json();
         } catch (_) {}
-        if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
+        
+        showToast("Redirecting to dashboard...");
+        setTimeout(() => {
+          if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
+        }, 1000);
       } catch (popupErr) {
         await signInWithRedirect(auth, provider);
       }
     } catch (e) {
-      setError(e?.message || "Google sign-in failed. Please try again.");
+      const errorMessage = e?.message || "Google sign-in failed. Please try again.";
+      setError(errorMessage);
+      showToast("Google sign-in failed");
     }
   };
 
@@ -292,7 +356,7 @@ export default function Login() {
               <div className="flex gap-2">
                 <button
                   onClick={handleForgotPassword}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2.5 rounded-lg text-xs font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2.5 rounded-lg text-xs font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 shadow-md hover:shadow-lg cursor-pointer"
                 >
                   Send Reset Email
                 </button>
@@ -302,7 +366,7 @@ export default function Login() {
                     setForgotPasswordMessage("");
                     setForgotPasswordEmail("");
                   }}
-                  className="flex-1 bg-gray-500 text-white py-2.5 rounded-lg text-xs font-semibold hover:bg-gray-600 transition-all duration-300"
+                  className="flex-1 bg-gray-500 text-white py-2.5 rounded-lg text-xs font-semibold hover:bg-gray-600 transition-all duration-300 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -372,11 +436,26 @@ export default function Login() {
         </div>
 
         <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
-          © 2025 Sell Predator. All rights reserved.
+          2025 Sell Predator. All rights reserved.
         </p>
       </div>
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 bg-[#000000] text-[#f5f5f5] px-4 py-2 rounded-lg shadow-lg animate-fadeIn z-50">
+          {toast.message}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s forwards;
+        }
+      `}</style>
     </>
   );
 }
-
-

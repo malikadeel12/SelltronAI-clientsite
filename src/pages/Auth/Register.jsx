@@ -11,7 +11,8 @@ import Timer from "../../components/Timer";
  * - Implemented email verification flow with 60-second timer.
  * - Added verification code input step before account creation.
  * - Maintains existing Firebase auth and role-based routing.
- * Why: Enhanced security with email verification during signup.
+ * - Added toast notifications for better user feedback during signup process.
+ * Why: Enhanced security with email verification during signup and improved UX.
  * Dependencies/Related: Timer component, email verification APIs, Firebase auth.
  */
 
@@ -36,11 +37,134 @@ export default function SignUp() {
     phone: "",
     terms: false,
   });
+  const [selectedCountry, setSelectedCountry] = useState("PK");
   const [verificationCode, setVerificationCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [timerExpired, setTimerExpired] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "" });
+
+  const showToast = (msg) => {
+    setToast({ show: true, message: msg });
+    setTimeout(() => setToast({ show: false, message: "" }), 3000);
+  };
+
+  // Country codes and prefixes
+  const countries = {
+    PK: { code: "PK", prefix: "+92", flag: "", name: "Pakistan" },
+    US: { code: "US", prefix: "+1", flag: "", name: "United States" },
+    IN: { code: "IN", prefix: "+91", flag: "", name: "India" }
+  };
+
+  // Auto-detect country based on phone number
+  const detectCountryFromPhone = (phoneNumber) => {
+    const cleanPhone = phoneNumber.replace(/\s+/g, '');
+    
+    // Pakistan patterns: 03xx, 92xxx, +92xxx
+    if (/^(03|92|(\+92))/.test(cleanPhone)) {
+      return "PK";
+    }
+    // US patterns: 1xxx, +1xxx (and common US area codes)
+    if (/^(1|(\+1))/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) {
+      return "US";
+    }
+    // India patterns: 91xxx, +91xxx, or starts with 6-9 (Indian mobile)
+    if (/^(91|(\+91)|[6-9])/.test(cleanPhone)) {
+      return "IN";
+    }
+    
+    return selectedCountry; // Keep current if no pattern matches
+  };
+
+  // Format phone number based on country
+  const formatPhoneNumber = (phone, country) => {
+    let cleanPhone = phone.replace(/[^\d]/g, '');
+    const countryData = countries[country];
+    
+    if (!cleanPhone) return "";
+    
+    // Remove country code if already present
+    if (country === "PK" && cleanPhone.startsWith("92")) {
+      cleanPhone = cleanPhone.substring(2);
+    } else if (country === "US" && cleanPhone.startsWith("1")) {
+      cleanPhone = cleanPhone.substring(1);
+    } else if (country === "IN" && cleanPhone.startsWith("91")) {
+      cleanPhone = cleanPhone.substring(2);
+    }
+    
+    // Remove leading zero for Pakistan
+    if (country === "PK" && cleanPhone.startsWith("0")) {
+      cleanPhone = cleanPhone.substring(1);
+    }
+    
+    // Format based on country
+    if (country === "PK") {
+      // Pakistan format: +92 3XX XXX XXXX
+      if (cleanPhone.length <= 10) {
+        return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
+      }
+    } else if (country === "US") {
+      // US format: +1 (XXX) XXX-XXXX
+      if (cleanPhone.length <= 10) {
+        const area = cleanPhone.substring(0, 3);
+        const first = cleanPhone.substring(3, 6);
+        const second = cleanPhone.substring(6, 10);
+        return `${countryData.prefix} ${area ? `(${area})` : ''} ${first} ${second}`.trim().replace(/\s+/g, ' ');
+      }
+    } else if (country === "IN") {
+      // India format: +91 XXXXX XXXXX
+      if (cleanPhone.length <= 10) {
+        return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
+      }
+    }
+    
+    return `${countryData.prefix} ${cleanPhone}`;
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    
+    if (name === "phone") {
+      // Auto-detect country from phone number
+      const detectedCountry = detectCountryFromPhone(value);
+      if (detectedCountry !== selectedCountry) {
+        setSelectedCountry(detectedCountry);
+      }
+      
+      // Format the phone number
+      const formattedPhone = formatPhoneNumber(value, detectedCountry);
+      setFormData({
+        ...formData,
+        [name]: formattedPhone,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: type === "checkbox" ? checked : value,
+      });
+    }
+  };
+
+  const handleCountryChange = (e) => {
+    const newCountry = e.target.value;
+    setSelectedCountry(newCountry);
+    
+    // Reformat existing phone number with new country
+    if (formData.phone) {
+      const formattedPhone = formatPhoneNumber(formData.phone, newCountry);
+      setFormData({
+        ...formData,
+        phone: formattedPhone,
+      });
+    } else {
+      // Set country prefix if no phone number exists
+      setFormData({
+        ...formData,
+        phone: countries[newCountry].prefix + " ",
+      });
+    }
+  };
 
   // Handle redirect result after Google redirect sign-in
   React.useEffect(() => {
@@ -66,18 +190,11 @@ export default function SignUp() {
     })();
   }, [navigate]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === "checkbox" ? checked : value,
-    });
-  };
-
   const handleSendVerification = async () => {
     // Validation
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
       setError("Name, Email, Password and Confirm Password are required!");
+      showToast("Please fill in all required fields");
       return;
     }
     
@@ -85,24 +202,29 @@ export default function SignUp() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError("Please enter a valid email address!");
+      showToast("Invalid email format");
       return;
     }
     
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters.");
+      showToast("Password too short (minimum 6 characters)");
       return;
     }
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match.");
+      showToast("Passwords do not match");
       return;
     }
     if (!formData.terms) {
       setError("You must agree to the Terms of Service.");
+      showToast("Please agree to Terms of Service");
       return;
     }
 
     setLoading(true);
     setError("");
+    showToast("Checking email availability...");
 
     try {
       console.log("🔍 Checking if email already exists...");
@@ -110,20 +232,42 @@ export default function SignUp() {
       await checkEmailExists(formData.email);
       console.log("✅ Email is available");
       
+      showToast("Sending verification code...");
+      
       // If email is available, send verification code
       console.log("📧 Sending verification code...");
       await sendVerificationCode(formData.email);
       console.log("✅ Verification code sent successfully");
       setStep("verification");
       setTimerExpired(false);
+      showToast("Verification code sent to your email!");
     } catch (e) {
       console.error("❌ Signup error:", e);
+      
+      // Handle specific error cases with user-friendly messages
+      let errorMessage = "Failed to send verification code. Please try again.";
+      let toastMessage = "Failed to send verification code";
+      
       // Check if it's an email already exists error
-      if (e?.message && (e.message.includes("Email already in use") || e.message.includes("already exists"))) {
-        setError("Email already exists! Please use a different email or try logging in.");
-      } else {
-        setError(e?.message || "Failed to send verification code. Please try again.");
+      if (e?.message && (e.message.includes("Email already in use") || e.message.includes("already exists") || e.message.includes("Email already used"))) {
+        errorMessage = "This email is already registered. Please use a different email or try logging in.";
+        toastMessage = "Email already exists";
+      } else if (e?.message && e.message.includes("Request failed: 400")) {
+        errorMessage = "This email is already registered. Please use a different email or try logging in.";
+        toastMessage = "Email already exists";
+      } else if (e?.message && e.message.includes("invalid email")) {
+        errorMessage = "Please enter a valid email address.";
+        toastMessage = "Invalid email format";
+      } else if (e?.message && e.message.includes("network")) {
+        errorMessage = "Network error. Please check your internet connection.";
+        toastMessage = "Network error";
+      } else if (e?.message) {
+        errorMessage = e.message;
+        toastMessage = "Signup failed";
       }
+      
+      setError(errorMessage);
+      showToast(toastMessage);
     } finally {
       setLoading(false);
     }
@@ -132,16 +276,20 @@ export default function SignUp() {
   const handleVerifyCode = async () => {
     if (!verificationCode.trim()) {
       setError("Please enter the verification code.");
+      showToast("Please enter verification code");
       return;
     }
 
     setLoading(true);
     setError("");
+    showToast("Verifying code...");
 
     try {
       console.log("🔍 Starting OTP verification...");
       await verifyEmailCode(formData.email, verificationCode);
       console.log("✅ OTP verified successfully");
+      
+      showToast("Code verified! Creating account...");
       
       // Code verified, now create the account
       console.log("🔍 Creating Firebase account...");
@@ -151,6 +299,8 @@ export default function SignUp() {
         formData.password
       );
       console.log("✅ Firebase account created:", cred.user.uid);
+
+      showToast("Setting up your profile...");
 
       // Update user profile with name
       if (formData.name) {
@@ -202,6 +352,11 @@ export default function SignUp() {
       console.log("🎉 All steps completed successfully!");
       setSuccess(true);
       setLoading(false);
+      if (who.role === "admin") {
+        showToast("Account created successfully! Redirecting to Admin Dashboard...");
+      } else {
+        showToast("Account created successfully! Redirecting to Predator Dashboard...");
+      }
       
       // Redirect based on role after a short delay
       setTimeout(() => {
@@ -215,6 +370,7 @@ export default function SignUp() {
     } catch (e) {
       console.error("Verification error:", e);
       setError(e?.message || "Verification failed. Please try again.");
+      showToast("Verification failed");
       setLoading(false);
     }
   };
@@ -222,11 +378,14 @@ export default function SignUp() {
   const handleResendCode = async () => {
     setLoading(true);
     setError("");
+    showToast("Resending verification code...");
     try {
       await sendVerificationCode(formData.email);
       setTimerExpired(false);
+      showToast("New verification code sent!");
     } catch (e) {
       setError(e?.message || "Failed to resend code. Please try again.");
+      showToast("Failed to resend code");
     } finally {
       setLoading(false);
     }
@@ -247,6 +406,8 @@ export default function SignUp() {
   // Google Sign-Up/Login (same flow)
   const handleGoogleSignIn = async () => {
     try {
+      showToast("Signing up with Google...");
+      
       const auth = getAuthInstance();
       await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
@@ -261,6 +422,8 @@ export default function SignUp() {
             displayName: cred.user.email?.split('@')[0] || 'User'
           });
         }
+        
+        showToast("Google signup successful! Setting up account...");
         
         if (cred.user?.email === "admin@gmail.com") {
           const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -279,12 +442,17 @@ export default function SignUp() {
           });
           if (res.ok) who = await res.json();
         } catch (_) {}
-        if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
+        
+        showToast("Redirecting to dashboard...");
+        setTimeout(() => {
+          if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
+        }, 1000);
       } catch (popupErr) {
         await signInWithRedirect(auth, provider);
       }
     } catch (e) {
       setError(e?.message || "Google sign-in failed. Please try again.");
+      showToast("Google signup failed");
     }
   };
 
@@ -362,7 +530,7 @@ export default function SignUp() {
           </div>
 
           <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
-            © 2025 Sell Predator. All rights reserved.
+            &copy; 2025 Sell Predator. All rights reserved.
           </p>
         </div>
       </>
@@ -457,11 +625,13 @@ export default function SignUp() {
             <div className="flex flex-col sm:flex-row">
               <select
                 name="country"
+                value={selectedCountry}
+                onChange={handleCountryChange}
                 className="border rounded-t-md sm:rounded-l-md sm:rounded-tr-none px-2 py-2 text-xs sm:text-sm text-[#000000]"
               >
-                <option>US</option>
-                <option>PK</option>
-                <option>IN</option>
+                <option value="PK">Pakistan (+92)</option>
+                <option value="US">United States (+1)</option>
+                <option value="IN">India (+91)</option>
               </select>
               <input
                 type="tel"
@@ -480,7 +650,7 @@ export default function SignUp() {
               name="terms"
               checked={formData.terms}
               onChange={handleChange}
-              className="mr-2 mt-0.5 sm:mt-0"
+              className="mr-2 mt-0.5 sm:mt-0 cursor-pointer"
             />
             <span>
               By signing up, you agree to our{" "}
@@ -532,9 +702,26 @@ export default function SignUp() {
         </p>
 
         <p className="mt-2 text-[10px] sm:text-xs text-[#000000] text-center">
-          © 2025 Sell Predator. All rights reserved.
+          &copy; 2025 Sell Predator. All rights reserved.
         </p>
       </div>
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 bg-[#000000] text-[#f5f5f5] px-4 py-2 rounded-lg shadow-lg animate-fadeIn z-50">
+          {toast.message}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s forwards;
+        }
+      `}</style>
     </>
   );
 }
