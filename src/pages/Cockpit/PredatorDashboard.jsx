@@ -68,6 +68,22 @@ export default function PredatorDashboard() {
   const currentAudioRef = useRef(null);
   const lastAutoSelectedSuggestionRef = useRef(null);
 
+  // Stop any active microphone inputs (live recognition or manual recording)
+  const stopAllInput = () => {
+    // Stop real-time recognition if running
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (_) {}
+      recognitionRef.current = null;
+    }
+    // Stop MediaRecorder recording if active
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      try { rec.stop(); } catch (_) {}
+    }
+    setStreaming(false);
+    setRecording(false);
+  };
+
   const showToast = (msg) => {
     setToast({ show: true, message: msg });
     setTimeout(() => setToast({ show: false, message: "" }), 2000);
@@ -360,7 +376,8 @@ export default function PredatorDashboard() {
         try {
           const ttsResult = await runTts({ text: responseText, voice });
           if (ttsResult.audioUrl) {
-            // Ensure no overlap with any existing audio
+            // Ensure mic is off and no overlap with any existing audio
+            stopAllInput();
             stopAllAudio();
             const audio = new Audio(ttsResult.audioUrl);
             currentAudioRef.current = audio;
@@ -402,6 +419,8 @@ export default function PredatorDashboard() {
   const speakText = (text) => {
     if (!speechActive || !text) return;
     
+    // Stop mic input so we don't capture our own TTS
+    stopAllInput();
     // Stop any currently playing audio/speech to avoid overlap
     stopAllAudio();
     
