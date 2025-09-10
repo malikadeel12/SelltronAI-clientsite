@@ -9,7 +9,7 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runVoicePipeline, runStt, runGpt, runTts } from "../../lib/api";
+import { fetchVoiceConfig, runStt, runGpt, runTts } from "../../lib/api";
 
 // Font styles
 const orbitronStyle = {
@@ -37,6 +37,15 @@ export default function PredatorDashboard() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState("sales");
   const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
+  const [streaming, setStreaming] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [coachingSuggestions, setCoachingSuggestions] = useState([]);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [isAskGptProcessing, setIsAskGptProcessing] = useState(false);
+  const [predatorAnswerRefreshing, setPredatorAnswerRefreshing] = useState(false);
+  const [coachingButtonsRefreshing, setCoachingButtonsRefreshing] = useState(false);
+  const [responseSpeed, setResponseSpeed] = useState(null);
+  const [isProcessingFast, setIsProcessingFast] = useState(false);
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
@@ -53,15 +62,69 @@ export default function PredatorDashboard() {
   const recordedChunksRef = useRef([]);
   const mimeTypeRef = useRef('audio/webm;codecs=opus');
   const encodingRef = useRef('WEBM_OPUS');
+  const recognitionRef = useRef(null);
+  const processingTimeoutRef = useRef(null);
+  const lastProcessedTextRef = useRef("");
+  const currentAudioRef = useRef(null);
+  const lastAutoSelectedSuggestionRef = useRef(null);
 
   const showToast = (msg) => {
     setToast({ show: true, message: msg });
     setTimeout(() => setToast({ show: false, message: "" }), 2000);
   };
 
+  // Function to stop all audio playback
+  const stopAllAudio = () => {
+    // Stop speech synthesis
+    window.speechSynthesis.cancel();
+    
+    // Stop any playing audio
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+    
+    // Set voice active to false
+    setIsVoiceActive(false);
+  };
+
   const triggerConfetti = () => {
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 1500);
+  };
+
+  const triggerRefreshAnimation = () => {
+    // Trigger predator answer refresh
+    setPredatorAnswerRefreshing(true);
+    setTimeout(() => setPredatorAnswerRefreshing(false), 1000);
+    
+    // Trigger coaching buttons refresh
+    setCoachingButtonsRefreshing(true);
+    setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
+  };
+
+  const startSpeedTimer = () => {
+    const startTime = Date.now();
+    setIsProcessingFast(true);
+    setResponseSpeed(null);
+    return startTime;
+  };
+
+  const endSpeedTimer = (startTime) => {
+    const endTime = Date.now();
+    const speed = endTime - startTime;
+    setResponseSpeed(speed);
+    setIsProcessingFast(false);
+    
+    // Show speed feedback
+    if (speed < 3000) {
+      showToast(`⚡ Ultra-fast response: ${speed}ms`);
+    } else if (speed < 5000) {
+      showToast(`🚀 Fast response: ${speed}ms`);
+    } else {
+      showToast(`⏱️ Response time: ${speed}ms`);
+    }
   };
 
   const handleLogout = async () => {
@@ -90,6 +153,13 @@ export default function PredatorDashboard() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Cleanup audio on component unmount
+  useEffect(() => {
+    return () => {
+      stopAllAudio();
+    };
   }, []);
 
   const startRecording = async () => {
@@ -139,11 +209,13 @@ export default function PredatorDashboard() {
       mediaRecorder.onstart = () => {
         console.log("🎤 MediaRecorder started");
         setRecording(true);
+        setIsVoiceActive(true);
       };
       
       mediaRecorder.onstop = () => {
         console.log("🎤 MediaRecorder stopped");
         setRecording(false);
+        setIsVoiceActive(false);
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
@@ -162,102 +234,12 @@ export default function PredatorDashboard() {
     if (rec && rec.state !== "inactive") {
       console.log("🛑 Stopping MediaRecorder...");
       rec.stop();
+      setIsVoiceActive(false);
       // Stream tracks are already stopped in onstop event
     }
   };
 
-  const handleStart = async () => {
-    console.log("🎤 Starting voice recording...");
-    await startRecording();
-    setTranscript("Listening...");
-    console.log("🎤 Voice recording started successfully");
-  };
-
-  const handleStop = async () => {
-    console.log("🛑 Stopping voice recording...");
-    stopRecording();
-    showToast("Processing...");
-    try {
-      // Wait a bit longer on mobile for the last audio data to flush
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const blob = new Blob(recordedChunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
-      console.log("📦 Audio blob created:", {
-        size: blob.size,
-        type: blob.type,
-        chunks: recordedChunksRef.current.length
-      });
-      
-      // Check if we have audio data
-      if (blob.size === 0) {
-        console.error("❌ No audio data recorded!");
-        showToast("No audio recorded. Please try again.");
-        return;
-      }
-      
-      console.log("🚀 Starting voice pipeline with params:", {
-        mode,
-        voice,
-        language: language === "German" ? "de-US" : "en-US"
-      });
-      
-      const result = await runVoicePipeline({ 
-        audioBlob: blob, 
-        mode, 
-        voice, 
-        language: language === "German" ? "de-DE" : "en-US", 
-        encoding: encodingRef.current,
-        hints: defaultHints,
-        boost: sttBoost,
-        sttModel
-      });
-      
-      console.log("📝 Voice pipeline result:", result);
-      console.log("🎯 STT Transcript:", result.transcript);
-      console.log("🤖 GPT Response:", result.responseText);
-      console.log("🔊 TTS Audio URL:", result.audioUrl ? "Available" : "Not available");
-      
-      // Check if STT failed and use browser fallback
-      if (result.transcript && result.transcript.includes("Google Cloud Speech-to-Text is not configured")) {
-        console.log("🔄 STT failed, using browser Speech Recognition...");
-        await handleBrowserSTT(blob);
-        return;
-      }
-      
-      setTranscript(result.transcript || "");
-      setPredatorAnswer(result.responseText || "");
-      
-      // Use real TTS audio if available, otherwise fallback to browser TTS
-      if (speechActive && (result.responseText || predatorAnswer)) {
-        console.log("🔊 Playing audio response...");
-        if (result.audioUrl) {
-          console.log("🎵 Using Google Cloud TTS audio");
-          // Play real TTS audio from Google Cloud
-          const audio = new Audio(result.audioUrl);
-          audio.play().catch(e => {
-            console.error("❌ TTS audio playback failed:", e);
-            console.log("🔄 Falling back to browser TTS");
-            // Fallback to browser TTS
-            const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utter);
-          });
-        } else {
-          console.log("🔄 Using browser TTS (no Google Cloud audio)");
-          // Fallback to browser TTS
-          const utter = new SpeechSynthesisUtterance(result.responseText || predatorAnswer);
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utter);
-        }
-      }
-      console.log("✅ Voice pipeline completed successfully!");
-      triggerConfetti();
-      showToast("Ready");
-    } catch (e) {
-      console.error("❌ Voice pipeline failed:", e);
-      showToast("Pipeline failed");
-    }
-  };
+  // removed unused handleStart/handleStop to keep code minimal
 
   const handleRecording = async () => {
     if (recording) {
@@ -295,11 +277,14 @@ export default function PredatorDashboard() {
             const { responseText } = await runGpt({ transcript, mode });
             setPredatorAnswer(responseText);
             
+            // Trigger refresh animation for new response
+            if (responseText) {
+              triggerRefreshAnimation();
+            }
+            
             // Play TTS response
             if (speechActive && responseText) {
-              const utter = new SpeechSynthesisUtterance(responseText);
-              window.speechSynthesis.cancel();
-              window.speechSynthesis.speak(utter);
+              speakText(responseText);
             }
             
             triggerConfetti();
@@ -352,51 +337,59 @@ export default function PredatorDashboard() {
 
   const handleSubmitAsk = async () => {
     if (!askText.trim()) return;
+    
+    // Check if voice is currently active
+    if (isVoiceActive) {
+      showToast("Wait, we are working on voice input. After completion we will start Ask GPT.");
+      return;
+    }
+    
+    setIsAskGptProcessing(true);
+    const speedTimer = startSpeedTimer();
     try {
       const { responseText } = await runGpt({ transcript: askText, mode });
       setPredatorAnswer(responseText);
+      
+      // Trigger refresh animation for new response
+      if (responseText) {
+        triggerRefreshAnimation();
+      }
       
       if (speechActive && responseText) {
         // Try to get TTS audio for the response
         try {
           const ttsResult = await runTts({ text: responseText, voice });
           if (ttsResult.audioUrl) {
+            // Ensure no overlap with any existing audio
+            stopAllAudio();
             const audio = new Audio(ttsResult.audioUrl);
+            currentAudioRef.current = audio;
+            audio.onplay = () => setIsVoiceActive(true);
+            audio.onended = () => { setIsVoiceActive(false); currentAudioRef.current = null; };
+            audio.onpause = () => { /* keep state unless ended */ };
             audio.play().catch(e => {
               console.error("TTS audio playback failed:", e);
-              // Fallback to browser TTS
-              const utter = new SpeechSynthesisUtterance(responseText);
-              window.speechSynthesis.cancel();
-              window.speechSynthesis.speak(utter);
+              speakText(responseText);
             });
           } else {
-            // Fallback to browser TTS
-            const utter = new SpeechSynthesisUtterance(responseText);
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utter);
+            speakText(responseText);
           }
         } catch (ttsError) {
           console.error("TTS failed:", ttsError);
-          // Fallback to browser TTS
-          const utter = new SpeechSynthesisUtterance(responseText);
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utter);
+          speakText(responseText);
         }
       }
       triggerConfetti();
       setAskText("");
-      showToast("GPT responded");
+      endSpeedTimer(speedTimer);
     } catch (e) {
       showToast("GPT failed");
+    } finally {
+      setIsAskGptProcessing(false);
     }
   };
 
-  const handleGoodAnswer = (choice) => {
-    const answer = `You clicked ${choice}. Here is a dummy response.`;
-    setPredatorAnswer(answer);
-    triggerConfetti();
-    showToast(`${choice} selected`);
-  };
+  // removed unused handleGoodAnswer
 
   const handleOtherButton = (name) => {
     const answer = `${name} clicked. Showing dummy response.`;
@@ -404,6 +397,207 @@ export default function PredatorDashboard() {
     triggerConfetti();
     showToast(`${name} executed`);
   };
+
+  // Helper function to handle TTS consistently
+  const speakText = (text) => {
+    if (!speechActive || !text) return;
+    
+    // Stop any currently playing audio/speech to avoid overlap
+    stopAllAudio();
+    
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 1;
+    
+    // Track active state properly
+    utter.onstart = () => setIsVoiceActive(true);
+    utter.onend = () => setIsVoiceActive(false);
+    utter.onerror = () => setIsVoiceActive(false);
+    
+    window.speechSynthesis.speak(utter);
+  };
+
+  // Real-time speech recognition setup
+  const startRealTimeRecognition = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = language === "German" ? "de-DE" : "en-US";
+      recognition.maxAlternatives = 1;
+      
+      recognition.onstart = () => {
+        console.log("🎤 Real-time speech recognition started");
+        setStreaming(true);
+        setLiveTranscript("Listening...");
+        setIsVoiceActive(true);
+        
+        // Stop any playing audio/speech and clear everything when user starts speaking again
+        stopAllAudio();
+        setPredatorAnswer("");
+        setCoachingSuggestions([]);
+        setTranscript("");
+        
+        showToast("Live transcription active");
+      };
+      
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        // Clear predator answer as soon as user starts speaking and show processing
+        if (event.resultIndex === 0 && predatorAnswer) {
+          setPredatorAnswer("");
+          setResponseSpeed(null);
+          setIsProcessingFast(true);
+        }
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript + ' ';
+          } else {
+            interimTranscript += result[0].transcript;
+          }
+        }
+        
+        // Update live transcript with both final and interim results
+        if (finalTranscript) {
+          // Use only new speech content, don't append to old transcript
+          setTranscript(finalTranscript);
+          setLiveTranscript(finalTranscript + interimTranscript);
+          
+          // Process final sentences for coaching suggestions
+          processForCoaching(finalTranscript.trim());
+        } else {
+          // Show interim results - use only interim content
+          setLiveTranscript(interimTranscript);
+        }
+      };
+      
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          showToast("Speech recognition error");
+        }
+      };
+      
+      recognition.onend = () => {
+        if (streaming) {
+          // Restart recognition if still streaming
+          setTimeout(() => {
+            if (streaming && recognitionRef.current) {
+              try {
+                recognition.start();
+              } catch (e) {
+                console.log("Recognition restart failed:", e);
+              }
+            }
+          }, 100);
+        } else {
+          setIsVoiceActive(false);
+        }
+      };
+      
+      recognitionRef.current = recognition;
+      recognition.start();
+    } else {
+      showToast("Speech recognition not supported in this browser");
+    }
+  };
+
+  // Stop real-time recognition
+  const stopRealTimeRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+    setStreaming(false);
+    setLiveTranscript("");
+    setCoachingSuggestions([]);
+    lastProcessedTextRef.current = "";
+    setIsVoiceActive(false);
+    showToast("Live transcription stopped");
+  };
+
+  // Process speech for coaching suggestions
+  const processForCoaching = async (sentence) => {
+    if (sentence.length < 5 || sentence === lastProcessedTextRef.current) return;
+    
+    lastProcessedTextRef.current = sentence;
+    
+    // Clear previous timeout
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+    
+    // Debounce processing to avoid too many API calls
+    processingTimeoutRef.current = setTimeout(async () => {
+      try {
+        console.log("🤖 Processing for coaching:", sentence);
+        const coachingTimer = startSpeedTimer();
+        
+        // Create a coaching prompt based on mode
+        const coachingPrompt = mode === "sales" 
+          ? `Customer said: "${sentence}". Generate 3 short sales responses (max 100 words each) the agent should say:`
+          : `Customer said: "${sentence}". Generate 3 short support responses (max 100 words each) the agent should say:`;
+        
+        const { responseText } = await runGpt({ 
+          transcript: coachingPrompt, 
+          mode
+        });
+        
+        // Parse response into 3 suggestions
+        const lines = responseText.split('\n').filter(line => line.trim());
+        const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+          id: index + 1,
+          text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+          timestamp: Date.now()
+        }));
+        
+        if (suggestions.length > 0) {
+          setCoachingSuggestions(suggestions);
+          console.log("💡 Coaching suggestions updated:", suggestions);
+          // Trigger refresh animation for new coaching suggestions
+          setCoachingButtonsRefreshing(true);
+          setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
+          endSpeedTimer(coachingTimer);
+        }
+      } catch (error) {
+        console.error("Error generating coaching suggestions:", error);
+      }
+    }, 800); // 0.8 second debounce for ultra-fast response
+  };
+
+  // Handle coaching suggestion selection
+  const selectCoachingSuggestion = (suggestion) => {
+    setPredatorAnswer(suggestion.text);
+    
+    // Speak the suggestion if speech is active
+    if (speechActive) {
+      speakText(suggestion.text);
+    }
+    
+    triggerConfetti();
+    showToast("Suggestion selected");
+  };
+
+  // Auto-select and play Good Answer A when suggestions arrive
+  useEffect(() => {
+    if (coachingSuggestions && coachingSuggestions.length > 0) {
+      const firstSuggestion = coachingSuggestions[0];
+      const suggestionKey = firstSuggestion.timestamp || firstSuggestion.id;
+      if (lastAutoSelectedSuggestionRef.current !== suggestionKey) {
+        lastAutoSelectedSuggestionRef.current = suggestionKey;
+        selectCoachingSuggestion(firstSuggestion);
+      }
+    }
+  }, [coachingSuggestions]);
 
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-2 bg-[#f5f5f5] font-sans overflow-y-auto" style={openSansStyle}>
@@ -456,13 +650,13 @@ export default function PredatorDashboard() {
           <div className="flex gap-2 mb-3">
             <button
               className="cursor-pointer border rounded-lg px-4 py-1.5 shadow hover:bg-[#f5f5f5] w-full sm:w-auto"
-              onClick={handleStart}
+              onClick={startRealTimeRecognition}
             >
               Start
             </button>
             <button
               className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow w-full sm:w-auto"
-              onClick={handleStop}
+              onClick={stopRealTimeRecognition}
             >
               Stop
             </button>
@@ -527,8 +721,8 @@ export default function PredatorDashboard() {
           </button>
 
           <textarea
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
+            value={liveTranscript}
+            onChange={(e) => setLiveTranscript(e.target.value)}
             className="w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto"
           />
         </div>
@@ -570,15 +764,34 @@ export default function PredatorDashboard() {
 
         {/* Predator Answer */}
         <div className="rounded-2xl p-4 bg-[#f5f5f5] shadow-lg flex flex-col">
-          <h2 className="font-bold text-lg mb-3" style={orbitronStyle}>
-            Predator Answer
-          </h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-bold text-lg" style={orbitronStyle}>
+              Predator Answer
+            </h2>
+            {isProcessingFast && (
+              <div className="flex items-center gap-2 text-sm text-green-600 font-semibold">
+                <span className="animate-spin">⚡</span>
+                Processing...
+              </div>
+            )}
+            {responseSpeed && (
+              <div className={`text-xs font-semibold px-2 py-1 rounded ${
+                responseSpeed < 3000 ? 'bg-green-100 text-green-700' : 
+                responseSpeed < 5000 ? 'bg-yellow-100 text-yellow-700' : 
+                'bg-red-100 text-red-700'
+              }`}>
+                {responseSpeed}ms
+              </div>
+            )}
+          </div>
           <textarea
             value={predatorAnswer}
             onChange={(e) => setPredatorAnswer(e.target.value)}
-            className="w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 mb-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto"
+            className={`w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 mb-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto transition-all duration-500 ${
+              predatorAnswerRefreshing ? 'animate-pulse bg-yellow-50 border-yellow-400 shadow-lg' : ''
+            }`}
           />
-          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+          {/* <div className="flex flex-col sm:flex-row gap-2 mb-3">
             {["Good Answer A", "Good Answer B", "Good Answer C"].map((btn) => (
               <button
                 key={btn}
@@ -586,6 +799,19 @@ export default function PredatorDashboard() {
                 onClick={() => handleGoodAnswer(btn)}
               >
                 {btn}
+              </button>
+            ))}
+          </div> */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+            {coachingSuggestions.map((suggestion, index) => (
+              <button
+                key={suggestion.id}
+                className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow flex-1 font-medium transition-all duration-500 ${
+                  coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
+                }`}
+                onClick={() => selectCoachingSuggestion(suggestion)}
+              >
+                Good Answer {String.fromCharCode(65 + index)}
               </button>
             ))}
           </div>
@@ -599,13 +825,22 @@ export default function PredatorDashboard() {
           placeholder="Ask GPT..."
           value={askText}
           onChange={(e) => setAskText(e.target.value)}
-          className="flex-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none"
+          disabled={isVoiceActive || isAskGptProcessing}
+          className={`flex-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none ${
+            isVoiceActive || isAskGptProcessing ? 'bg-gray-200 cursor-not-allowed' : ''
+          }`}
         />
         <button
-          className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-5 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto"
+          className={`cursor-pointer px-5 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto ${
+            isVoiceActive || isAskGptProcessing 
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+              : 'bg-[#FFD700] hover:bg-[#FFD700]'
+          }`}
           onClick={handleSubmitAsk}
+          disabled={isVoiceActive || isAskGptProcessing}
         >
-          Submit
+          {isAskGptProcessing && <span className="animate-spin mr-2">⏳</span>}
+          {isVoiceActive ? 'Voice Active' : isAskGptProcessing ? 'Processing...' : 'Submit'}
         </button>
       </div>
 
