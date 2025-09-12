@@ -9,7 +9,7 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runStt, runGpt, runTts } from "../../lib/api";
+import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline } from "../../lib/api";
 
 // Font styles
 const orbitronStyle = {
@@ -67,6 +67,8 @@ export default function PredatorDashboard() {
   const lastProcessedTextRef = useRef("");
   const currentAudioRef = useRef(null);
   const lastAutoSelectedSuggestionRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const lastGptResponseTimeRef = useRef(0);
 
   // Stop any active microphone inputs (live recognition or manual recording)
   const stopAllInput = () => {
@@ -234,6 +236,62 @@ export default function PredatorDashboard() {
         setIsVoiceActive(false);
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
+
+        // When recording stops, run the full voice pipeline (STT -> GPT -> optional TTS)
+        (async () => {
+          try {
+            if (!recordedChunksRef.current.length) return;
+            const blob = new Blob(recordedChunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
+            const speedTimer = startSpeedTimer();
+            const { transcript: t } = await runVoicePipeline({
+              audioBlob: blob,
+              mode,
+              voice,
+              language: language === "German" ? "de-DE" : "en-US",
+              encoding: encodingRef.current,
+              hints: defaultHints,
+              boost: sttBoost,
+              sttModel
+            });
+            
+            if (t && t.trim()) {
+              // Get 3 responses from GPT for Good Answer A, B, C
+              const prompt = mode === "sales" 
+                ? `Customer said: "${t}". Generate 3 different sales responses (max 100 words each) the agent should say:`
+                : `Customer said: "${t}". Generate 3 different support responses (max 100 words each) the agent should say:`;
+              
+              const { responseText } = await runGpt({ transcript: prompt, mode });
+              
+              if (responseText) {
+                // Parse response into 3 suggestions
+                const lines = responseText.split('\n').filter(line => line.trim());
+                const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                  id: index + 1,
+                  text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+                  timestamp: Date.now()
+                }));
+                
+                if (suggestions.length > 0) {
+                  setCoachingSuggestions(suggestions);
+                  // Set Good Answer A as the main answer and auto-play it
+                  const firstAnswer = suggestions[0].text;
+                  setPredatorAnswer(firstAnswer);
+                  triggerRefreshAnimation();
+                  
+                  if (speechActive) {
+                    speakText(firstAnswer);
+                  }
+                }
+              }
+            }
+            endSpeedTimer(speedTimer);
+          } catch (e) {
+            console.error("Voice pipeline failed:", e);
+            showToast("Voice pipeline failed");
+          } finally {
+            recordedChunksRef.current = [];
+          }
+        })();
       };
       
       mediaRecorderRef.current = mediaRecorder;
@@ -488,8 +546,49 @@ export default function PredatorDashboard() {
           setTranscript(finalTranscript);
           setLiveTranscript(finalTranscript + interimTranscript);
           
-          // Process final sentences for coaching suggestions
-          processForCoaching(finalTranscript.trim());
+          // Debounce silence: after ~1s of no more finals, call GPT and update answer
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+          const captured = finalTranscript.trim();
+          const speedTimer = startSpeedTimer();
+          silenceTimeoutRef.current = setTimeout(async () => {
+            try {
+              // Get 3 responses from GPT for Good Answer A, B, C
+              const prompt = mode === "sales" 
+                ? `Customer said: "${captured}". Generate 3 different sales responses (max 100 words each) the agent should say:`
+                : `Customer said: "${captured}". Generate 3 different support responses (max 100 words each) the agent should say:`;
+              
+              const { responseText } = await runGpt({ transcript: prompt, mode });
+              
+              if (responseText) {
+                // Parse response into 3 suggestions
+                const lines = responseText.split('\n').filter(line => line.trim());
+                const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                  id: index + 1,
+                  text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+                  timestamp: Date.now()
+                }));
+                
+                if (suggestions.length > 0) {
+                  setCoachingSuggestions(suggestions);
+                  // Set Good Answer A as the main answer and auto-play it
+                  const firstAnswer = suggestions[0].text;
+                  setPredatorAnswer(firstAnswer);
+                  triggerRefreshAnimation();
+                  
+                  if (speechActive) {
+                    speakText(firstAnswer);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('GPT after-silence error:', err);
+              showToast('GPT failed');
+            } finally {
+              endSpeedTimer(speedTimer);
+            }
+          }, 1000);
         } else {
           // Show interim results - use only interim content
           setLiveTranscript(interimTranscript);
@@ -544,54 +643,7 @@ export default function PredatorDashboard() {
     showToast("Live transcription stopped");
   };
 
-  // Process speech for coaching suggestions
-  const processForCoaching = async (sentence) => {
-    if (sentence.length < 5 || sentence === lastProcessedTextRef.current) return;
-    
-    lastProcessedTextRef.current = sentence;
-    
-    // Clear previous timeout
-    if (processingTimeoutRef.current) {
-      clearTimeout(processingTimeoutRef.current);
-    }
-    
-    // Debounce processing to avoid too many API calls
-    processingTimeoutRef.current = setTimeout(async () => {
-      try {
-        console.log("🤖 Processing for coaching:", sentence);
-        const coachingTimer = startSpeedTimer();
-        
-        // Create a coaching prompt based on mode
-        const coachingPrompt = mode === "sales" 
-          ? `Customer said: "${sentence}". Generate 3 short sales responses (max 100 words each) the agent should say:`
-          : `Customer said: "${sentence}". Generate 3 short support responses (max 100 words each) the agent should say:`;
-        
-        const { responseText } = await runGpt({ 
-          transcript: coachingPrompt, 
-          mode
-        });
-        
-        // Parse response into 3 suggestions
-        const lines = responseText.split('\n').filter(line => line.trim());
-        const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
-          id: index + 1,
-          text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-          timestamp: Date.now()
-        }));
-        
-        if (suggestions.length > 0) {
-          setCoachingSuggestions(suggestions);
-          console.log("💡 Coaching suggestions updated:", suggestions);
-          // Trigger refresh animation for new coaching suggestions
-          setCoachingButtonsRefreshing(true);
-          setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
-          endSpeedTimer(coachingTimer);
-        }
-      } catch (error) {
-        console.error("Error generating coaching suggestions:", error);
-      }
-    }, 800); // 0.8 second debounce for ultra-fast response
-  };
+  // Removed processForCoaching - now handled directly in silence timeout
 
   // Handle coaching suggestion selection
   const selectCoachingSuggestion = (suggestion) => {
@@ -606,17 +658,7 @@ export default function PredatorDashboard() {
     showToast("Suggestion selected");
   };
 
-  // Auto-select and play Good Answer A when suggestions arrive
-  useEffect(() => {
-    if (coachingSuggestions && coachingSuggestions.length > 0) {
-      const firstSuggestion = coachingSuggestions[0];
-      const suggestionKey = firstSuggestion.timestamp || firstSuggestion.id;
-      if (lastAutoSelectedSuggestionRef.current !== suggestionKey) {
-        lastAutoSelectedSuggestionRef.current = suggestionKey;
-        selectCoachingSuggestion(firstSuggestion);
-      }
-    }
-  }, [coachingSuggestions]);
+  // Removed auto-selection useEffect - Good Answer A is now auto-selected in silence timeout
 
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-2 bg-[#f5f5f5] font-sans overflow-y-auto" style={openSansStyle}>
