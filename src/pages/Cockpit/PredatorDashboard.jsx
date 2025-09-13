@@ -324,9 +324,9 @@ export default function PredatorDashboard() {
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
                           // Restart live recognition after TTS ends
-                          if (streaming) {
+                          if (streaming && !manuallyStopped) {
                             setTimeout(() => {
-                              if (streaming) {
+                              if (streaming && !manuallyStopped) {
                                 console.log("🔄 Restarting recognition after TTS...");
                                 if (!recognitionRef.current) {
                                   startRealTimeRecognition();
@@ -339,7 +339,7 @@ export default function PredatorDashboard() {
                                     console.log("Error stopping recognition:", e);
                                   }
                                   setTimeout(() => {
-                                    if (streaming) {
+                                    if (streaming && !manuallyStopped) {
                                       startRealTimeRecognition();
                                       setIsVoiceActive(true); // Ensure mic is active
                                     }
@@ -586,9 +586,9 @@ export default function PredatorDashboard() {
       // DON'T set isVoiceActive to false - keep mic always on
       setIsTtsPlaying(false);
       // Restart live recognition after browser TTS ends
-      if (streaming) {
+      if (streaming && !manuallyStopped) {
         setTimeout(() => {
-          if (streaming) {
+          if (streaming && !manuallyStopped) {
             console.log("🔄 Restarting recognition after browser TTS...");
             if (!recognitionRef.current) {
               startRealTimeRecognition();
@@ -600,7 +600,7 @@ export default function PredatorDashboard() {
                 console.log("Error stopping recognition:", e);
               }
               setTimeout(() => {
-                if (streaming) {
+                if (streaming && !manuallyStopped) {
                   startRealTimeRecognition();
                 }
               }, 100);
@@ -752,9 +752,9 @@ export default function PredatorDashboard() {
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
                           // Restart live recognition after TTS ends
-                          if (streaming) {
+                          if (streaming && !manuallyStopped) {
                             setTimeout(() => {
-                              if (streaming) {
+                              if (streaming && !manuallyStopped) {
                                 console.log("🔄 Restarting recognition after TTS...");
                                 if (!recognitionRef.current) {
                                   startRealTimeRecognition();
@@ -767,7 +767,7 @@ export default function PredatorDashboard() {
                                     console.log("Error stopping recognition:", e);
                                   }
                                   setTimeout(() => {
-                                    if (streaming) {
+                                    if (streaming && !manuallyStopped) {
                                       startRealTimeRecognition();
                                       setIsVoiceActive(true); // Ensure mic is active
                                     }
