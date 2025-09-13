@@ -860,6 +860,10 @@ export default function PredatorDashboard() {
   const stopRealTimeRecognition = () => {
     console.log("🛑 Stopping real-time recognition - MIC WILL BE OFF");
     manuallyStoppedRef.current = true; // Set flag to prevent auto-restart
+    
+    // Stop all audio playback immediately
+    stopAllAudio();
+    
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
