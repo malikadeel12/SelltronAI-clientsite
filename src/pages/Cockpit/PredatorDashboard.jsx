@@ -48,7 +48,7 @@ export default function PredatorDashboard() {
   const [coachingButtonsRefreshing, setCoachingButtonsRefreshing] = useState(false);
   const [responseSpeed, setResponseSpeed] = useState(null);
   const [isProcessingFast, setIsProcessingFast] = useState(false);
-  const [manuallyStopped, setManuallyStopped] = useState(false);
+  const manuallyStoppedRef = useRef(false);
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
@@ -631,7 +631,7 @@ export default function PredatorDashboard() {
       recognition.onstart = () => {
         console.log("🎤 Real-time speech recognition started - MIC IS NOW LISTENING");
         setStreaming(true);
-        setManuallyStopped(false); // Reset manual stop flag when starting
+        manuallyStoppedRef.current = false; // Reset manual stop flag when starting
         setLiveTranscript("Listening...");
         setIsVoiceActive(true); // Mic is listening
         
@@ -812,9 +812,9 @@ export default function PredatorDashboard() {
       };
       
       recognition.onend = () => {
-        console.log("🎤 Recognition ended, streaming:", streaming, "manuallyStopped:", manuallyStopped);
+        console.log("🎤 Recognition ended, streaming:", streaming, "manuallyStopped:", manuallyStoppedRef.current);
         // Only restart recognition if it wasn't manually stopped
-        if (!manuallyStopped) {
+        if (!manuallyStoppedRef.current) {
           setTimeout(() => {
             console.log("🔄 Restarting recognition...");
             try {
@@ -859,7 +859,7 @@ export default function PredatorDashboard() {
   // Stop real-time recognition
   const stopRealTimeRecognition = () => {
     console.log("🛑 Stopping real-time recognition - MIC WILL BE OFF");
-    setManuallyStopped(true); // Set flag to prevent auto-restart
+    manuallyStoppedRef.current = true; // Set flag to prevent auto-restart
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
