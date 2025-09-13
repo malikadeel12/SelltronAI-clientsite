@@ -7,8 +7,8 @@
  */
 
 // Prefer env base URL in production; fallback to same-origin relative paths
-const API_BASE="http://localhost:8000"
-//const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
+//const API_BASE="http://localhost:8000"
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
 // --- Helper: JSON POST ---
 async function postJson(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
