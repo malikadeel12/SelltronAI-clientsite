@@ -408,7 +408,7 @@ export default function ProfileCover() {
                 </div>
                 <button
                   onClick={() => setShowPhoneEdit(!showPhoneEdit)}
-                  className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                  className="text-emerald-600 hover:text-emerald-700 text-sm font-medium cursor-pointer"
                 >
                   {showPhoneEdit ? "Cancel" : "Edit"}
                 </button>
@@ -438,14 +438,14 @@ export default function ProfileCover() {
                   <div className="flex space-x-2">
                     <button
                       type="submit"
-                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm"
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm cursor-pointer"
                     >
                       Save
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowPhoneEdit(false)}
-                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors text-sm"
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors text-sm cursor-pointer"
                     >
                       Cancel
                     </button>

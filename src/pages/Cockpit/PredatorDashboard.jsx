@@ -41,6 +41,8 @@ export default function PredatorDashboard() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [coachingSuggestions, setCoachingSuggestions] = useState([]);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const isTtsPlayingRef = useRef(false);
   const [isAskGptProcessing, setIsAskGptProcessing] = useState(false);
   const [predatorAnswerRefreshing, setPredatorAnswerRefreshing] = useState(false);
   const [coachingButtonsRefreshing, setCoachingButtonsRefreshing] = useState(false);
@@ -82,8 +84,9 @@ export default function PredatorDashboard() {
     if (rec && rec.state !== "inactive") {
       try { rec.stop(); } catch (_) {}
     }
-    setStreaming(false);
+    // DON'T set streaming to false - keep mic always on
     setRecording(false);
+    // Don't set isVoiceActive to false - keep mic ready for next input
   };
 
   const showToast = (msg) => {
@@ -93,18 +96,20 @@ export default function PredatorDashboard() {
 
   // Function to stop all audio playback
   const stopAllAudio = () => {
-    // Stop speech synthesis
+    console.log("🔇 Stopping all audio playback");
+    
+    // Stop speech synthesis immediately
     window.speechSynthesis.cancel();
     
-    // Stop any playing audio
+    // Stop any playing audio immediately
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current.currentTime = 0;
       currentAudioRef.current = null;
     }
     
-    // Set voice active to false
-    setIsVoiceActive(false);
+    // DON'T set isVoiceActive to false - keep mic ready for next input
+    console.log("🔇 All audio stopped - mic still ready");
   };
 
   const triggerConfetti = () => {
@@ -233,7 +238,7 @@ export default function PredatorDashboard() {
       mediaRecorder.onstop = () => {
         console.log("🎤 MediaRecorder stopped");
         setRecording(false);
-        setIsVoiceActive(false);
+        // Don't set isVoiceActive to false - keep mic ready for next input
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
 
@@ -246,7 +251,7 @@ export default function PredatorDashboard() {
             const { transcript: t } = await runVoicePipeline({
               audioBlob: blob,
               mode,
-              voice,
+              voice: aiVoiceSelection, // Use selected AI voice
               language: language === "German" ? "de-DE" : "en-US",
               encoding: encodingRef.current,
               hints: defaultHints,
@@ -257,8 +262,8 @@ export default function PredatorDashboard() {
             if (t && t.trim()) {
               // Get 3 responses from GPT for Good Answer A, B, C
               const prompt = mode === "sales" 
-                ? `Customer said: "${t}". Generate 3 different sales responses (max 100 words each) the agent should say:`
-                : `Customer said: "${t}". Generate 3 different support responses (max 100 words each) the agent should say:`;
+                ? `Customer said: "${t}". As a sales expert, generate 3 different persuasive sales responses (max 100 words each) that help close deals, address objections, and build value. Focus on benefits, urgency, and closing techniques:`
+                : `Customer said: "${t}". As a customer support expert, generate 3 different empathetic support responses (max 100 words each) that solve problems, show understanding, and provide clear solutions. Focus on problem resolution and customer satisfaction:`;
               
               const { responseText } = await runGpt({ transcript: prompt, mode });
               
@@ -279,7 +284,81 @@ export default function PredatorDashboard() {
                   triggerRefreshAnimation();
                   
                   if (speechActive) {
-                    speakText(firstAnswer);
+                    // Use TTS with selected voice for better quality
+                    try {
+                      const ttsResult = await runTts({ text: firstAnswer, voice: aiVoiceSelection });
+                      if (ttsResult.audioUrl) {
+                        stopAllInput();
+                        stopAllAudio();
+                        const audio = new Audio(ttsResult.audioUrl);
+                        currentAudioRef.current = audio;
+                        
+                        // Set TTS playing state immediately
+                        console.log("🔊 Setting TTS playing state to true");
+                        setIsTtsPlaying(true);
+                        isTtsPlayingRef.current = true;
+                        
+                        // Add event listeners before playing
+                        audio.addEventListener('play', () => {
+                          console.log("🔊 TTS audio started playing (addEventListener)");
+                          setIsTtsPlaying(true);
+                          isTtsPlayingRef.current = true;
+                        });
+                        
+                        audio.addEventListener('ended', () => {
+                          console.log("🔊 TTS audio ended (addEventListener)");
+                          setIsTtsPlaying(false);
+                          isTtsPlayingRef.current = false;
+                        });
+                        
+                        audio.onplay = () => {
+                          console.log("🔊 TTS audio started playing (onplay)");
+                          setIsTtsPlaying(true);
+                          isTtsPlayingRef.current = true;
+                        };
+                        audio.onended = () => { 
+                          console.log("🔊 TTS audio ended, streaming:", streaming);
+                          // DON'T set isVoiceActive to false - keep mic always on
+                          console.log("🔊 TTS audio ended");
+                          setIsTtsPlaying(false);
+                          currentAudioRef.current = null;
+                          // Restart live recognition after TTS ends
+                          if (streaming) {
+                            setTimeout(() => {
+                              if (streaming) {
+                                console.log("🔄 Restarting recognition after TTS...");
+                                if (!recognitionRef.current) {
+                                  startRealTimeRecognition();
+                                  setIsVoiceActive(true); // Ensure mic is active
+                                } else {
+                                  // Force restart existing recognition
+                                  try {
+                                    recognitionRef.current.stop();
+                                  } catch (e) {
+                                    console.log("Error stopping recognition:", e);
+                                  }
+                                  setTimeout(() => {
+                                    if (streaming) {
+                                      startRealTimeRecognition();
+                                      setIsVoiceActive(true); // Ensure mic is active
+                                    }
+                                  }, 100);
+                                }
+                              }
+                            }, 200); // Reduced delay
+                          }
+                        };
+                        audio.play().catch(e => {
+                          console.error("TTS audio playback failed:", e);
+                          speakText(firstAnswer);
+                        });
+                      } else {
+                        speakText(firstAnswer);
+                      }
+                    } catch (ttsError) {
+                      console.error("TTS failed:", ttsError);
+                      speakText(firstAnswer);
+                    }
                   }
                 }
               }
@@ -308,7 +387,8 @@ export default function PredatorDashboard() {
     if (rec && rec.state !== "inactive") {
       console.log("🛑 Stopping MediaRecorder...");
       rec.stop();
-      setIsVoiceActive(false);
+      // Don't set isVoiceActive to false - keep mic ready
+      setRecording(false);
       // Stream tracks are already stopped in onstop event
     }
   };
@@ -412,9 +492,9 @@ export default function PredatorDashboard() {
   const handleSubmitAsk = async () => {
     if (!askText.trim()) return;
     
-    // Check if voice is currently active
-    if (isVoiceActive) {
-      showToast("Wait, we are working on voice input. After completion we will start Ask GPT.");
+    // Check if TTS is currently playing
+    if (isTtsPlaying) {
+      showToast("Wait, AI is speaking. After completion we will start Ask GPT.");
       return;
     }
     
@@ -432,15 +512,24 @@ export default function PredatorDashboard() {
       if (speechActive && responseText) {
         // Try to get TTS audio for the response
         try {
-          const ttsResult = await runTts({ text: responseText, voice });
+          const ttsResult = await runTts({ text: responseText, voice: aiVoiceSelection });
           if (ttsResult.audioUrl) {
             // Ensure mic is off and no overlap with any existing audio
             stopAllInput();
             stopAllAudio();
             const audio = new Audio(ttsResult.audioUrl);
             currentAudioRef.current = audio;
-            audio.onplay = () => setIsVoiceActive(true);
-            audio.onended = () => { setIsVoiceActive(false); currentAudioRef.current = null; };
+            audio.onplay = () => {
+            console.log("🔊 TTS audio started playing");
+            setIsTtsPlaying(true);
+          };
+                        audio.onended = () => { 
+                          // DON'T set isVoiceActive to false - keep mic always on
+                          console.log("🔊 TTS audio ended");
+                          setIsTtsPlaying(false);
+                          isTtsPlayingRef.current = false;
+                          currentAudioRef.current = null; 
+                        };
             audio.onpause = () => { /* keep state unless ended */ };
             audio.play().catch(e => {
               console.error("TTS audio playback failed:", e);
@@ -487,9 +576,42 @@ export default function PredatorDashboard() {
     utter.pitch = 1;
     
     // Track active state properly
-    utter.onstart = () => setIsVoiceActive(true);
-    utter.onend = () => setIsVoiceActive(false);
-    utter.onerror = () => setIsVoiceActive(false);
+    utter.onstart = () => {
+      console.log("🔊 Browser TTS started playing");
+      setIsTtsPlaying(true);
+    };
+    utter.onend = () => { 
+      console.log("🔊 Browser TTS ended, streaming:", streaming);
+      // DON'T set isVoiceActive to false - keep mic always on
+      setIsTtsPlaying(false);
+      // Restart live recognition after browser TTS ends
+      if (streaming) {
+        setTimeout(() => {
+          if (streaming) {
+            console.log("🔄 Restarting recognition after browser TTS...");
+            if (!recognitionRef.current) {
+              startRealTimeRecognition();
+            } else {
+              // Force restart existing recognition
+              try {
+                recognitionRef.current.stop();
+              } catch (e) {
+                console.log("Error stopping recognition:", e);
+              }
+              setTimeout(() => {
+                if (streaming) {
+                  startRealTimeRecognition();
+                }
+              }, 100);
+            }
+          }
+        }, 200); // Reduced delay
+      }
+    };
+    utter.onerror = () => {
+      console.log("🔊 Browser TTS error occurred");
+      // DON'T set isVoiceActive to false - keep mic always on
+    };
     
     window.speechSynthesis.speak(utter);
   };
@@ -506,18 +628,26 @@ export default function PredatorDashboard() {
       recognition.maxAlternatives = 1;
       
       recognition.onstart = () => {
-        console.log("🎤 Real-time speech recognition started");
+        console.log("🎤 Real-time speech recognition started - MIC IS NOW LISTENING");
         setStreaming(true);
         setLiveTranscript("Listening...");
-        setIsVoiceActive(true);
+        setIsVoiceActive(true); // Mic is listening
         
-        // Stop any playing audio/speech and clear everything when user starts speaking again
-        stopAllAudio();
-        setPredatorAnswer("");
-        setCoachingSuggestions([]);
-        setTranscript("");
+        // Only stop audio if TTS is not playing
+        console.log("🔇 Checking TTS state:", isTtsPlaying, "TTS ref:", isTtsPlayingRef.current, "Current audio:", currentAudioRef.current);
+        if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
+          console.log("🔇 Stopping audio because TTS is not playing");
+          stopAllAudio();
+          setPredatorAnswer("");
+          setCoachingSuggestions([]);
+          setTranscript("");
+        } else {
+          console.log("🔇 Not stopping audio because TTS is playing or audio exists");
+        }
         
-        showToast("Live transcription active");
+        showToast("🎤 Mic is listening - speak anytime!");
+        console.log("✅ Mic state: isVoiceActive = true, streaming = true");
+        console.log("🔄 Recognition instance:", recognition);
       };
       
       recognition.onresult = (event) => {
@@ -554,10 +684,13 @@ export default function PredatorDashboard() {
           const speedTimer = startSpeedTimer();
           silenceTimeoutRef.current = setTimeout(async () => {
             try {
+              // Stop any playing audio before processing new response
+              stopAllAudio();
+              
               // Get 3 responses from GPT for Good Answer A, B, C
               const prompt = mode === "sales" 
-                ? `Customer said: "${captured}". Generate 3 different sales responses (max 100 words each) the agent should say:`
-                : `Customer said: "${captured}". Generate 3 different support responses (max 100 words each) the agent should say:`;
+                ? `Customer said: "${captured}". As a sales expert, generate 3 different persuasive sales responses (max 100 words each) that help close deals, address objections, and build value. Focus on benefits, urgency, and closing techniques:`
+                : `Customer said: "${captured}". As a customer support expert, generate 3 different empathetic support responses (max 100 words each) that solve problems, show understanding, and provide clear solutions. Focus on problem resolution and customer satisfaction:`;
               
               const { responseText } = await runGpt({ transcript: prompt, mode });
               
@@ -578,7 +711,81 @@ export default function PredatorDashboard() {
                   triggerRefreshAnimation();
                   
                   if (speechActive) {
-                    speakText(firstAnswer);
+                    // Use TTS with selected voice for better quality
+                    try {
+                      const ttsResult = await runTts({ text: firstAnswer, voice: aiVoiceSelection });
+                      if (ttsResult.audioUrl) {
+                        stopAllInput();
+                        stopAllAudio();
+                        const audio = new Audio(ttsResult.audioUrl);
+                        currentAudioRef.current = audio;
+                        
+                        // Set TTS playing state immediately
+                        console.log("🔊 Setting TTS playing state to true");
+                        setIsTtsPlaying(true);
+                        isTtsPlayingRef.current = true;
+                        
+                        // Add event listeners before playing
+                        audio.addEventListener('play', () => {
+                          console.log("🔊 TTS audio started playing (addEventListener)");
+                          setIsTtsPlaying(true);
+                          isTtsPlayingRef.current = true;
+                        });
+                        
+                        audio.addEventListener('ended', () => {
+                          console.log("🔊 TTS audio ended (addEventListener)");
+                          setIsTtsPlaying(false);
+                          isTtsPlayingRef.current = false;
+                        });
+                        
+                        audio.onplay = () => {
+                          console.log("🔊 TTS audio started playing (onplay)");
+                          setIsTtsPlaying(true);
+                          isTtsPlayingRef.current = true;
+                        };
+                        audio.onended = () => { 
+                          console.log("🔊 TTS audio ended, streaming:", streaming);
+                          // DON'T set isVoiceActive to false - keep mic always on
+                          console.log("🔊 TTS audio ended");
+                          setIsTtsPlaying(false);
+                          currentAudioRef.current = null;
+                          // Restart live recognition after TTS ends
+                          if (streaming) {
+                            setTimeout(() => {
+                              if (streaming) {
+                                console.log("🔄 Restarting recognition after TTS...");
+                                if (!recognitionRef.current) {
+                                  startRealTimeRecognition();
+                                  setIsVoiceActive(true); // Ensure mic is active
+                                } else {
+                                  // Force restart existing recognition
+                                  try {
+                                    recognitionRef.current.stop();
+                                  } catch (e) {
+                                    console.log("Error stopping recognition:", e);
+                                  }
+                                  setTimeout(() => {
+                                    if (streaming) {
+                                      startRealTimeRecognition();
+                                      setIsVoiceActive(true); // Ensure mic is active
+                                    }
+                                  }, 100);
+                                }
+                              }
+                            }, 200); // Reduced delay
+                          }
+                        };
+                        audio.play().catch(e => {
+                          console.error("TTS audio playback failed:", e);
+                          speakText(firstAnswer);
+                        });
+                      } else {
+                        speakText(firstAnswer);
+                      }
+                    } catch (ttsError) {
+                      console.error("TTS failed:", ttsError);
+                      speakText(firstAnswer);
+                    }
                   }
                 }
               }
@@ -603,24 +810,41 @@ export default function PredatorDashboard() {
       };
       
       recognition.onend = () => {
-        if (streaming) {
-          // Restart recognition if still streaming
-          setTimeout(() => {
-            if (streaming && recognitionRef.current) {
-              try {
-                recognition.start();
-              } catch (e) {
-                console.log("Recognition restart failed:", e);
-              }
-            }
-          }, 100);
-        } else {
-          setIsVoiceActive(false);
-        }
+        console.log("🎤 Recognition ended, streaming:", streaming);
+        // ALWAYS restart recognition to keep mic always on (unless manually stopped)
+        setTimeout(() => {
+          console.log("🔄 Restarting recognition...");
+          try {
+            // Create new recognition instance for restart
+            const newRecognition = new SpeechRecognition();
+            newRecognition.continuous = true;
+            newRecognition.interimResults = true;
+            newRecognition.lang = language === "German" ? "de-DE" : "en-US";
+            newRecognition.maxAlternatives = 1;
+            
+            // Copy all event handlers
+            newRecognition.onstart = recognition.onstart;
+            newRecognition.onresult = recognition.onresult;
+            newRecognition.onerror = recognition.onerror;
+            newRecognition.onend = recognition.onend;
+            
+            recognitionRef.current = newRecognition;
+            newRecognition.start();
+            setIsVoiceActive(true); // Mic is listening after restart
+            console.log("✅ Recognition restarted successfully - MIC IS ACTIVE");
+          } catch (e) {
+            console.log("❌ Recognition restart failed:", e);
+            // Try again after a longer delay
+            setTimeout(() => {
+              startRealTimeRecognition();
+            }, 1000);
+          }
+        }, 5000); // Increased delay to 5 seconds to allow TTS to complete
       };
       
       recognitionRef.current = recognition;
       recognition.start();
+      setIsVoiceActive(true); // Mic is listening when starting
     } else {
       showToast("Speech recognition not supported in this browser");
     }
@@ -628,6 +852,7 @@ export default function PredatorDashboard() {
 
   // Stop real-time recognition
   const stopRealTimeRecognition = () => {
+    console.log("🛑 Stopping real-time recognition - MIC WILL BE OFF");
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -640,18 +865,67 @@ export default function PredatorDashboard() {
     setCoachingSuggestions([]);
     lastProcessedTextRef.current = "";
     setIsVoiceActive(false);
-    showToast("Live transcription stopped");
+    showToast("🛑 Mic stopped - click Start to listen again");
   };
 
   // Removed processForCoaching - now handled directly in silence timeout
 
   // Handle coaching suggestion selection
-  const selectCoachingSuggestion = (suggestion) => {
+  const selectCoachingSuggestion = async (suggestion) => {
     setPredatorAnswer(suggestion.text);
     
     // Speak the suggestion if speech is active
     if (speechActive) {
-      speakText(suggestion.text);
+      // Use TTS with selected voice for better quality
+      try {
+        const ttsResult = await runTts({ text: suggestion.text, voice: aiVoiceSelection });
+        if (ttsResult.audioUrl) {
+          stopAllInput();
+          stopAllAudio();
+          const audio = new Audio(ttsResult.audioUrl);
+          currentAudioRef.current = audio;
+          
+          // Set TTS playing state immediately
+          console.log("🔊 Setting TTS playing state to true");
+          setIsTtsPlaying(true);
+          isTtsPlayingRef.current = true;
+          
+          // Add event listeners before playing
+          audio.addEventListener('play', () => {
+            console.log("🔊 TTS audio started playing (addEventListener)");
+            setIsTtsPlaying(true);
+            isTtsPlayingRef.current = true;
+          });
+          
+          audio.addEventListener('ended', () => {
+            console.log("🔊 TTS audio ended (addEventListener)");
+            setIsTtsPlaying(false);
+            isTtsPlayingRef.current = false;
+          });
+          
+          audio.onplay = () => {
+            console.log("🔊 TTS audio started playing (onplay)");
+            setIsTtsPlaying(true);
+            isTtsPlayingRef.current = true;
+          };
+                        audio.onended = () => { 
+                          // DON'T set isVoiceActive to false - keep mic always on
+                          console.log("🔊 TTS audio ended");
+                          setIsTtsPlaying(false);
+                          isTtsPlayingRef.current = false;
+                          currentAudioRef.current = null; 
+                        };
+          audio.play().catch(e => {
+            console.error("TTS audio playback failed:", e);
+            speakText(suggestion.text);
+          });
+        } else {
+          speakText(suggestion.text);
+        }
+      } catch (ttsError) {
+        console.error("TTS failed:", ttsError);
+        speakText(suggestion.text);
+      }
     }
     
     triggerConfetti();
@@ -710,16 +984,19 @@ export default function PredatorDashboard() {
 
           <div className="flex gap-2 mb-3">
             <button
-              className="cursor-pointer border rounded-lg px-4 py-1.5 shadow hover:bg-[#f5f5f5] w-full sm:w-auto"
+              className={`cursor-pointer border rounded-lg px-4 py-1.5 shadow w-full sm:w-auto ${
+                streaming ? 'bg-green-100 border-green-400 text-green-700' : 'hover:bg-[#f5f5f5]'
+              }`}
               onClick={startRealTimeRecognition}
+              disabled={streaming}
             >
-              Start
+              {streaming ? '🎤 Listening...' : 'Start Live Mic'}
             </button>
             <button
               className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow w-full sm:w-auto"
               onClick={stopRealTimeRecognition}
             >
-              Stop
+              Stop Mic
             </button>
           </div>
 
@@ -741,11 +1018,18 @@ export default function PredatorDashboard() {
               <select
                 value={mode}
                 onChange={(e) => setMode(e.target.value)}
-                className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
+                className={`mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer ${
+                  mode === 'sales' ? 'bg-green-50 border-green-300' : 'bg-blue-50 border-blue-300'
+                }`}
               >
                 <option value="sales">Sales</option>
                 <option value="support">Support</option>
               </select>
+              <span className={`text-xs mt-1 font-semibold ${
+                mode === 'sales' ? 'text-green-600' : 'text-blue-600'
+              }`}>
+                {mode === 'sales' ? '🎯 Sales Mode Active' : '🛠️ Support Mode Active'}
+              </span>
             </label>
           </div>
 
@@ -755,12 +1039,13 @@ export default function PredatorDashboard() {
               <select
                 value={aiVoiceSelection}
                 onChange={(e) => { setAiVoiceSelection(e.target.value); setVoice(e.target.value); }}
-                className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
+                className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer bg-yellow-50"
               >
                 {voices.map(v => (
                   <option key={v.id} value={v.id}>{v.label}</option>
                 ))}
               </select>
+              <span className="text-xs text-gray-600 mt-1">Selected: {voices.find(v => v.id === aiVoiceSelection)?.label || aiVoiceSelection}</span>
             </label>
 
             <label className="flex items-center text-sm sm:text-base w-full sm:w-1/2 sm:justify-end cursor-pointer">
@@ -784,7 +1069,10 @@ export default function PredatorDashboard() {
           <textarea
             value={liveTranscript}
             onChange={(e) => setLiveTranscript(e.target.value)}
-            className="w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto"
+            className={`w-full flex-1 border-2 rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto ${
+              streaming ? 'border-green-400 bg-green-50' : 'border-[#D72638]'
+            }`}
+            placeholder={streaming ? "🎤 Mic is listening... Speak now!" : "Click 'Start Live Mic' to begin listening..."}
           />
         </div>
 
@@ -886,22 +1174,22 @@ export default function PredatorDashboard() {
           placeholder="Ask GPT..."
           value={askText}
           onChange={(e) => setAskText(e.target.value)}
-          disabled={isVoiceActive || isAskGptProcessing}
+          disabled={isAskGptProcessing}
           className={`flex-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none ${
-            isVoiceActive || isAskGptProcessing ? 'bg-gray-200 cursor-not-allowed' : ''
+            isAskGptProcessing ? 'bg-gray-200 cursor-not-allowed' : ''
           }`}
         />
         <button
           className={`cursor-pointer px-5 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto ${
-            isVoiceActive || isAskGptProcessing 
+            isAskGptProcessing 
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
               : 'bg-[#FFD700] hover:bg-[#FFD700]'
           }`}
           onClick={handleSubmitAsk}
-          disabled={isVoiceActive || isAskGptProcessing}
+          disabled={isAskGptProcessing}
         >
           {isAskGptProcessing && <span className="animate-spin mr-2">⏳</span>}
-          {isVoiceActive ? 'Voice Active' : isAskGptProcessing ? 'Processing...' : 'Submit'}
+          {isAskGptProcessing ? 'Processing...' : 'Submit'}
         </button>
       </div>
 
