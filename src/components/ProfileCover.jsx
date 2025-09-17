@@ -37,70 +37,88 @@ export default function ProfileCover() {
   };
 
   // Country codes and prefixes
-  const countries = {
-    PK: { code: "PK", prefix: "+92", name: "Pakistan" },
-    US: { code: "US", prefix: "+1", name: "United States" },
-    IN: { code: "IN", prefix: "+91", name: "India" }
-  };
+const countries = {
+  PK: { code: "PK", prefix: "+92", name: "Pakistan" },
+  US: { code: "US", prefix: "+1", name: "United States" },
+  IN: { code: "IN", prefix: "+91", name: "India" },
+  DE: { code: "DE", prefix: "+49", name: "Germany" },
+  FR: { code: "FR", prefix: "+33", name: "France" },
+  ES: { code: "ES", prefix: "+34", name: "Spain" },
+  IT: { code: "IT", prefix: "+39", name: "Italy" },
+  NL: { code: "NL", prefix: "+31", name: "Netherlands" },
+};
 
-  // Auto-detect country based on phone number
-  const detectCountryFromPhone = (phoneNumber) => {
-    const cleanPhone = phoneNumber.replace(/\s+/g, '');
+// Auto-detect country based on phone number
+const detectCountryFromPhone = (phoneNumber) => {
+  const cleanPhone = phoneNumber.replace(/\s+/g, "");
 
-    if (/^(03|92|(\+92))/.test(cleanPhone)) {
-      return "PK";
-    }
-    if (/^(1|(\+1))/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) {
-      return "US";
-    }
-    if (/^(91|(\+91)|[6-9])/.test(cleanPhone)) {
-      return "IN";
-    }
+  if (/^(03|92|(\+92))/.test(cleanPhone)) return "PK";
+  if (/^(1|(\+1))/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) return "US";
+  if (/^(91|(\+91)|[6-9])/.test(cleanPhone)) return "IN";
+  if (/^(\+49|49)/.test(cleanPhone)) return "DE";
+  if (/^(\+33|33)/.test(cleanPhone)) return "FR";
+  if (/^(\+34|34)/.test(cleanPhone)) return "ES";
+  if (/^(\+39|39)/.test(cleanPhone)) return "IT";
+  if (/^(\+31|31)/.test(cleanPhone)) return "NL";
 
-    return selectedCountry;
-  };
+  return selectedCountry;
+};
 
-  // Format phone number based on country
-  const formatPhoneNumber = (phone, country) => {
-    let cleanPhone = phone.replace(/[^\d]/g, '');
-    const countryData = countries[country];
+// Format phone number based on country
+const formatPhoneNumber = (phone, country) => {
+  let cleanPhone = phone.replace(/[^\d]/g, "");
+  const countryData = countries[country];
 
-    if (!cleanPhone) return "";
+  if (!cleanPhone) return "";
 
-    // Remove country code if already present
-    if (country === "PK" && cleanPhone.startsWith("92")) {
-      cleanPhone = cleanPhone.substring(2);
-    } else if (country === "US" && cleanPhone.startsWith("1")) {
-      cleanPhone = cleanPhone.substring(1);
-    } else if (country === "IN" && cleanPhone.startsWith("91")) {
-      cleanPhone = cleanPhone.substring(2);
-    }
+  // Remove country code if already present
+  if (country === "PK" && cleanPhone.startsWith("92")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "US" && cleanPhone.startsWith("1")) cleanPhone = cleanPhone.substring(1);
+  else if (country === "IN" && cleanPhone.startsWith("91")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "DE" && cleanPhone.startsWith("49")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "FR" && cleanPhone.startsWith("33")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "ES" && cleanPhone.startsWith("34")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "IT" && cleanPhone.startsWith("39")) cleanPhone = cleanPhone.substring(2);
+  else if (country === "NL" && cleanPhone.startsWith("31")) cleanPhone = cleanPhone.substring(2);
 
-    // Remove leading zero for Pakistan
-    if (country === "PK" && cleanPhone.startsWith("0")) {
-      cleanPhone = cleanPhone.substring(1);
-    }
+  // Special rule: Pakistan remove leading zero
+  if (country === "PK" && cleanPhone.startsWith("0")) {
+    cleanPhone = cleanPhone.substring(1);
+  }
 
-    // Format based on country
-    if (country === "PK") {
-      if (cleanPhone.length <= 10) {
-        return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
-      }
-    } else if (country === "US") {
-      if (cleanPhone.length <= 10) {
-        const area = cleanPhone.substring(0, 3);
-        const first = cleanPhone.substring(3, 6);
-        const second = cleanPhone.substring(6, 10);
-        return `${countryData.prefix} ${area ? `(${area})` : ''} ${first} ${second}`.trim().replace(/\s+/g, ' ');
-      }
-    } else if (country === "IN") {
-      if (cleanPhone.length <= 10) {
-        return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
-      }
-    }
+  // Format based on country
+  if (country === "PK") {
+    // +92 3XX XXX XXXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
+  } else if (country === "US") {
+    // +1 (XXX) XXX XXXX
+    const area = cleanPhone.substring(0, 3);
+    const first = cleanPhone.substring(3, 6);
+    const second = cleanPhone.substring(6, 10);
+    return `${countryData.prefix} (${area}) ${first} ${second}`.trim();
+  } else if (country === "IN") {
+    // +91 XXXXX XXXXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
+  } else if (country === "DE") {
+    // +49 XXXX XXXXXXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 4)} ${cleanPhone.substring(4, 11)}`.trim();
+  } else if (country === "FR") {
+    // +33 X XX XX XX XX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 1)} ${cleanPhone.substring(1, 3)} ${cleanPhone.substring(3, 5)} ${cleanPhone.substring(5, 7)} ${cleanPhone.substring(7, 9)}`.trim();
+  } else if (country === "ES") {
+    // +34 XXX XXX XXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 9)}`.trim();
+  } else if (country === "IT") {
+    // +39 XXX XXX XXXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
+  } else if (country === "NL") {
+    // +31 6 XXXXXXXX
+    return `${countryData.prefix} ${cleanPhone.substring(0, 1)} ${cleanPhone.substring(1, 9)}`.trim();
+  }
 
-    return `${countryData.prefix} ${cleanPhone}`;
-  };
+  return `${countryData.prefix} ${cleanPhone}`;
+};
+
 
   const handlePhoneChange = (e) => {
     const value = e.target.value;

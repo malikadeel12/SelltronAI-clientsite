@@ -52,86 +52,117 @@ export default function SignUp() {
 
   // Country codes and prefixes
   const countries = {
-    PK: { code: "PK", prefix: "+92", flag: "", name: "Pakistan" },
-    US: { code: "US", prefix: "+1", flag: "", name: "United States" },
-    IN: { code: "IN", prefix: "+91", flag: "", name: "India" }
+    PK: { code: "PK", prefix: "+92", flag: "🇵🇰", name: "Pakistan" },
+    US: { code: "US", prefix: "+1", flag: "🇺🇸", name: "United States" },
+    IN: { code: "IN", prefix: "+91", flag: "🇮🇳", name: "India" },
+    DE: { code: "DE", prefix: "+49", flag: "🇩🇪", name: "Germany" },
+    FR: { code: "FR", prefix: "+33", flag: "🇫🇷", name: "France" },
+    ES: { code: "ES", prefix: "+34", flag: "🇪🇸", name: "Spain" },
+    IT: { code: "IT", prefix: "+39", flag: "🇮🇹", name: "Italy" },
+    NL: { code: "NL", prefix: "+31", flag: "🇳🇱", name: "Netherlands" },
+    // Add more EU countries as needed
   };
-
   // Auto-detect country based on phone number
-  const detectCountryFromPhone = (phoneNumber) => {
-    const cleanPhone = phoneNumber.replace(/\s+/g, '');
-    
-    // Pakistan patterns: 03xx, 92xxx, +92xxx
-    if (/^(03|92|(\+92))/.test(cleanPhone)) {
-      return "PK";
-    }
-    // US patterns: 1xxx, +1xxx (and common US area codes)
-    if (/^(1|(\+1))/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) {
-      return "US";
-    }
-    // India patterns: 91xxx, +91xxx, or starts with 6-9 (Indian mobile)
-    if (/^(91|(\+91)|[6-9])/.test(cleanPhone)) {
-      return "IN";
-    }
-    
-    return selectedCountry; // Keep current if no pattern matches
-  };
+  const detectCountryFromPhone = (phoneNumber, selectedCountry = "US") => {
+    const cleanPhone = phoneNumber.replace(/\s+/g, "");
 
+    // Pakistan: 03xx, 92xxx, +92xxx
+    if (/^(03|92|\+92)/.test(cleanPhone)) return "PK";
+
+    // US: 1xxx, +1xxx or area codes 2xx-9xx
+    if (/^(1|\+1)/.test(cleanPhone) || /^[2-9]\d{2}/.test(cleanPhone)) return "US";
+
+    // India: 91xxx, +91xxx, starts with 6-9
+    if (/^(91|\+91|[6-9])/.test(cleanPhone)) return "IN";
+
+    // Germany: +49 or starts with 49
+    if (/^(\+49|49)/.test(cleanPhone)) return "DE";
+
+    // France: +33 or starts with 33
+    if (/^(\+33|33)/.test(cleanPhone)) return "FR";
+
+    // Spain: +34 or starts with 34
+    if (/^(\+34|34)/.test(cleanPhone)) return "ES";
+
+    // Italy: +39 or starts with 39
+    if (/^(\+39|39)/.test(cleanPhone)) return "IT";
+
+    // Netherlands: +31 or starts with 31
+    if (/^(\+31|31)/.test(cleanPhone)) return "NL";
+
+    return selectedCountry; // Keep current if no match
+  };
   // Format phone number based on country
   const formatPhoneNumber = (phone, country) => {
-    let cleanPhone = phone.replace(/[^\d]/g, '');
+    let cleanPhone = phone.replace(/[^\d]/g, "");
     const countryData = countries[country];
-    
     if (!cleanPhone) return "";
-    
-    // Remove country code if already present
-    if (country === "PK" && cleanPhone.startsWith("92")) {
-      cleanPhone = cleanPhone.substring(2);
-    } else if (country === "US" && cleanPhone.startsWith("1")) {
-      cleanPhone = cleanPhone.substring(1);
-    } else if (country === "IN" && cleanPhone.startsWith("91")) {
-      cleanPhone = cleanPhone.substring(2);
-    }
-    
-    // Remove leading zero for Pakistan
-    if (country === "PK" && cleanPhone.startsWith("0")) {
-      cleanPhone = cleanPhone.substring(1);
-    }
-    
-    // Format based on country
+
+    // Remove country codes if already included
+    if (country === "PK" && cleanPhone.startsWith("92")) cleanPhone = cleanPhone.substring(2);
+    if (country === "US" && cleanPhone.startsWith("1")) cleanPhone = cleanPhone.substring(1);
+    if (country === "IN" && cleanPhone.startsWith("91")) cleanPhone = cleanPhone.substring(2);
+    if (country === "DE" && cleanPhone.startsWith("49")) cleanPhone = cleanPhone.substring(2);
+    if (country === "FR" && cleanPhone.startsWith("33")) cleanPhone = cleanPhone.substring(2);
+    if (country === "ES" && cleanPhone.startsWith("34")) cleanPhone = cleanPhone.substring(2);
+    if (country === "IT" && cleanPhone.startsWith("39")) cleanPhone = cleanPhone.substring(2);
+    if (country === "NL" && cleanPhone.startsWith("31")) cleanPhone = cleanPhone.substring(2);
+
+    // Special handling per country
     if (country === "PK") {
-      // Pakistan format: +92 3XX XXX XXXX
-      if (cleanPhone.length <= 10) {
-        return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
-      }
-    } else if (country === "US") {
-      // US format: +1 (XXX) XXX-XXXX
-      if (cleanPhone.length <= 10) {
-        const area = cleanPhone.substring(0, 3);
-        const first = cleanPhone.substring(3, 6);
-        const second = cleanPhone.substring(6, 10);
-        return `${countryData.prefix} ${area ? `(${area})` : ''} ${first} ${second}`.trim().replace(/\s+/g, ' ');
-      }
-    } else if (country === "IN") {
-      // India format: +91 XXXXX XXXXX
-      if (cleanPhone.length <= 10) {
-        return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
-      }
+      if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.substring(1);
+      return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 10)}`.trim();
     }
-    
+
+    if (country === "US" && cleanPhone.length <= 10) {
+      const area = cleanPhone.substring(0, 3);
+      const first = cleanPhone.substring(3, 6);
+      const second = cleanPhone.substring(6, 10);
+      return `${countryData.prefix} (${area}) ${first}-${second}`.trim();
+    }
+
+    if (country === "IN" && cleanPhone.length <= 10) {
+      return `${countryData.prefix} ${cleanPhone.substring(0, 5)} ${cleanPhone.substring(5, 10)}`.trim();
+    }
+
+    if (country === "DE") {
+      // Germany numbers vary, but format as +49 XXXX XXXXXX
+      return `${countryData.prefix} ${cleanPhone.substring(0, 4)} ${cleanPhone.substring(4)}`.trim();
+    }
+
+    if (country === "FR" && cleanPhone.length === 9) {
+      // French numbers: +33 X XX XX XX XX
+      return `${countryData.prefix} ${cleanPhone[0]} ${cleanPhone.substring(1, 3)} ${cleanPhone.substring(3, 5)} ${cleanPhone.substring(5, 7)} ${cleanPhone.substring(7)}`;
+    }
+
+    if (country === "ES") {
+      // Spain: +34 XXX XXX XXX
+      return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6, 9)}`;
+    }
+
+    if (country === "IT") {
+      // Italy: +39 XXX XXX XXXX
+      return `${countryData.prefix} ${cleanPhone.substring(0, 3)} ${cleanPhone.substring(3, 6)} ${cleanPhone.substring(6)}`;
+    }
+
+    if (country === "NL") {
+      // Netherlands: +31 XX XXX XXXX
+      return `${countryData.prefix} ${cleanPhone.substring(0, 2)} ${cleanPhone.substring(2, 5)} ${cleanPhone.substring(5)}`;
+    }
+
     return `${countryData.prefix} ${cleanPhone}`;
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     if (name === "phone") {
       // Auto-detect country from phone number
       const detectedCountry = detectCountryFromPhone(value);
       if (detectedCountry !== selectedCountry) {
         setSelectedCountry(detectedCountry);
       }
-      
+
       // Format the phone number
       const formattedPhone = formatPhoneNumber(value, detectedCountry);
       setFormData({
@@ -149,7 +180,7 @@ export default function SignUp() {
   const handleCountryChange = (e) => {
     const newCountry = e.target.value;
     setSelectedCountry(newCountry);
-    
+
     // Reformat existing phone number with new country
     if (formData.phone) {
       const formattedPhone = formatPhoneNumber(formData.phone, newCountry);
@@ -181,7 +212,7 @@ export default function SignUp() {
               headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) who = await res.json();
-          } catch (_) {}
+          } catch (_) { }
           if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
         }
       } catch (_) {
@@ -197,7 +228,7 @@ export default function SignUp() {
       showToast("Please fill in all required fields");
       return;
     }
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
@@ -205,7 +236,7 @@ export default function SignUp() {
       showToast("Invalid email format");
       return;
     }
-    
+
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters.");
       showToast("Password too short (minimum 6 characters)");
@@ -231,9 +262,9 @@ export default function SignUp() {
       // First check if email already exists
       await checkEmailExists(formData.email);
       console.log("✅ Email is available");
-      
+
       showToast("Sending verification code...");
-      
+
       // If email is available, send verification code
       console.log("📧 Sending verification code...");
       await sendVerificationCode(formData.email);
@@ -243,11 +274,11 @@ export default function SignUp() {
       showToast("Verification code sent to your email!");
     } catch (e) {
       console.error("❌ Signup error:", e);
-      
+
       // Handle specific error cases with user-friendly messages
       let errorMessage = "Failed to send verification code. Please try again.";
       let toastMessage = "Failed to send verification code";
-      
+
       // Check if it's an email already exists error
       if (e?.message && (e.message.includes("Email already in use") || e.message.includes("already exists") || e.message.includes("Email already used"))) {
         errorMessage = "This email is already registered. Please use a different email or try logging in.";
@@ -265,7 +296,7 @@ export default function SignUp() {
         errorMessage = e.message;
         toastMessage = "Signup failed";
       }
-      
+
       setError(errorMessage);
       showToast(toastMessage);
     } finally {
@@ -288,9 +319,9 @@ export default function SignUp() {
       console.log("🔍 Starting OTP verification...");
       await verifyEmailCode(formData.email, verificationCode);
       console.log("✅ OTP verified successfully");
-      
+
       showToast("Code verified! Creating account...");
-      
+
       // Code verified, now create the account
       console.log("🔍 Creating Firebase account...");
       const cred = await createUserWithEmailAndPassword(
@@ -314,7 +345,7 @@ export default function SignUp() {
         console.log("🔍 Setting Firebase emailVerified to true...");
         await setEmailVerified(cred.user.uid);
         console.log("✅ Firebase emailVerified set to true");
-        
+
         // Refresh the user object to get updated emailVerified status
         await cred.user.reload();
         console.log("✅ User object refreshed, emailVerified:", cred.user.emailVerified);
@@ -357,7 +388,7 @@ export default function SignUp() {
       } else {
         showToast("Account created successfully! Redirecting to Predator Dashboard...");
       }
-      
+
       // Redirect based on role after a short delay
       setTimeout(() => {
         console.log("🚀 Redirecting to dashboard...");
@@ -407,24 +438,24 @@ export default function SignUp() {
   const handleGoogleSignIn = async () => {
     try {
       showToast("Signing up with Google...");
-      
+
       const auth = getAuthInstance();
       await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
-      
+
       try {
         const cred = await signInWithPopup(auth, provider);
-        
+
         // Update display name if not set
         if (cred.user && !cred.user.displayName) {
           await updateProfile(cred.user, {
             displayName: cred.user.email?.split('@')[0] || 'User'
           });
         }
-        
+
         showToast("Google signup successful! Setting up account...");
-        
+
         if (cred.user?.email === "admin@gmail.com") {
           const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
           await fetch(`${apiBase}/api/auth/assign-role`, {
@@ -441,8 +472,8 @@ export default function SignUp() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) who = await res.json();
-        } catch (_) {}
-        
+        } catch (_) { }
+
         showToast("Redirecting to dashboard...");
         setTimeout(() => {
           if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
@@ -484,8 +515,8 @@ export default function SignUp() {
           <div className="bg-[#f5f5f5] shadow-md rounded-lg p-4 sm:p-5 w-full max-w-md">
             {/* Timer */}
             <div className="mb-4">
-              <Timer 
-                seconds={60} 
+              <Timer
+                seconds={60}
                 onExpire={handleTimerExpire}
                 onReset={handleResendCode}
               />
@@ -603,7 +634,7 @@ export default function SignUp() {
               className="w-full border rounded-md px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          
+
           <div className="mb-2">
             <label className="block text-xs sm:text-sm text-[#000000] mb-1">
               Confirm Password
@@ -632,6 +663,12 @@ export default function SignUp() {
                 <option value="PK">Pakistan (+92)</option>
                 <option value="US">United States (+1)</option>
                 <option value="IN">India (+91)</option>
+                <option value="DE">Germany (+49)</option>
+                <option value="FR">France (+33)</option>
+                <option value="ES">Spain (+34)</option>
+                <option value="IT">Italy (+39)</option>
+                <option value="NL">Netherlands (+31)</option>
+
               </select>
               <input
                 type="tel"
