@@ -36,6 +36,8 @@ export default function PredatorDashboard() {
   const [transcribing, setTranscribing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState("sales");
+  const [previousMode, setPreviousMode] = useState("sales");
+  const modeRef = useRef("sales");
   const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
   const [streaming, setStreaming] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
@@ -161,6 +163,19 @@ export default function PredatorDashboard() {
     }
   };
 
+  // Handle mode change with proper cleanup
+  const handleModeChange = (newMode) => {
+    console.log(`🔄 Changing mode from ${mode} to ${newMode}`);
+    setMode(newMode);
+    modeRef.current = newMode; // Update ref immediately
+    // Clear all previous responses immediately
+    setCoachingSuggestions([]);
+    setPredatorAnswer("");
+    setTranscript("");
+    setLiveTranscript("");
+    showToast(`Switched to ${newMode === 'sales' ? 'Sales Mode (3 responses)' : 'Support Mode (1 response)'}`);
+  };
+
   useEffect(() => {
     // Load available voices/modes from backend
     fetchVoiceConfig()
@@ -178,6 +193,18 @@ export default function PredatorDashboard() {
       })
       .catch(() => {});
   }, []);
+
+  // Handle mode changes - clear previous responses when mode switches
+  useEffect(() => {
+    if (mode !== previousMode) {
+      console.log(`🔄 Mode changed from ${previousMode} to ${mode} - clearing previous responses`);
+      modeRef.current = mode; // Update ref when mode changes
+      setCoachingSuggestions([]);
+      setPredatorAnswer("");
+      setPreviousMode(mode);
+      showToast(`Mode switched to ${mode === 'sales' ? 'Sales (3 responses)' : 'Support (1 response)'}`);
+    }
+  }, [mode, previousMode]);
 
   // Cleanup audio on component unmount
   useEffect(() => {
@@ -261,25 +288,49 @@ export default function PredatorDashboard() {
             });
             
             if (t && t.trim()) {
-              // Get 3 responses from GPT for Good Answer A, B, C
-              const prompt = mode === "sales" 
-                ? `Customer said: "${t}". As a sales expert, generate 3 different persuasive sales responses (max 100 words each) that help close deals, address objections, and build value. Focus on benefits, urgency, and closing techniques:`
-                : `Customer said: "${t}". As a customer support expert, generate 3 different empathetic support responses (max 100 words each) that solve problems, show understanding, and provide clear solutions. Focus on problem resolution and customer satisfaction:`;
+              // Get responses from GPT based on current mode
+              const currentMode = modeRef.current; // Use ref for immediate value
+              const prompt = currentMode === "sales" 
+                ? `Customer said: "${t}". 
+
+SALES MODE INSTRUCTIONS:
+- Always professional, confident, and helpful
+- Short and clear answers (max 2-3 sentences)
+- Never sound unsure or negative
+- Focus on benefits, value, and closing
+- Handle objections directly (price, competition, timing)
+- Always give 3 different responses
+- Small Talk: Keep it polite and short (e.g., "I'm doing well, thanks for asking."). Then quickly guide the conversation back to the sales topic.
+
+Generate 3 different persuasive sales responses that help close deals, address objections, and build value. Each response should be professional, confident, and focused on benefits and closing:`
+                : `Customer said: "${t}". 
+
+SUPPORT MODE INSTRUCTIONS:
+- Empathetic, problem-solving tone
+- Give clear instructions or next steps
+- Keep it simple and easy to understand
+- Always give 1 response only
+
+Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
               
-              const { responseText } = await runGpt({ transcript: prompt, mode });
+              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode });
               
               if (responseText) {
-                // Parse response into 3 suggestions
+                // Parse response based on current mode
                 const lines = responseText.split('\n').filter(line => line.trim());
-                const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                const maxResponses = currentMode === "sales" ? 3 : 1;
+                console.log(`🎯 Generating ${maxResponses} response(s) for ${currentMode} mode`);
+                const suggestions = lines.slice(0, maxResponses).map((suggestion, index) => ({
                   id: index + 1,
                   text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
                   timestamp: Date.now()
                 }));
                 
+                console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
+                
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Set Good Answer A as the main answer and auto-play it
+                  // Set first answer as the main answer and auto-play it
                   const firstAnswer = suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();
@@ -659,6 +710,7 @@ export default function PredatorDashboard() {
         // Clear predator answer as soon as user starts speaking and show processing
         if (event.resultIndex === 0 && predatorAnswer) {
           setPredatorAnswer("");
+          setCoachingSuggestions([]); // Clear previous suggestions when new speech starts
           setResponseSpeed(null);
           setIsProcessingFast(true);
         }
@@ -689,25 +741,49 @@ export default function PredatorDashboard() {
               // Stop any playing audio before processing new response
               stopAllAudio();
               
-              // Get 3 responses from GPT for Good Answer A, B, C
-              const prompt = mode === "sales" 
-                ? `Customer said: "${captured}". As a sales expert, generate 3 different persuasive sales responses (max 100 words each) that help close deals, address objections, and build value. Focus on benefits, urgency, and closing techniques:`
-                : `Customer said: "${captured}". As a customer support expert, generate 3 different empathetic support responses (max 100 words each) that solve problems, show understanding, and provide clear solutions. Focus on problem resolution and customer satisfaction:`;
+              // Get responses from GPT based on current mode
+              const currentMode = modeRef.current; // Use ref for immediate value
+              const prompt = currentMode === "sales" 
+                ? `Customer said: "${captured}". 
+
+SALES MODE INSTRUCTIONS:
+- Always professional, confident, and helpful
+- Short and clear answers (max 2-3 sentences)
+- Never sound unsure or negative
+- Focus on benefits, value, and closing
+- Handle objections directly (price, competition, timing)
+- Always give 3 different responses
+- Small Talk: Keep it polite and short (e.g., "I'm doing well, thanks for asking."). Then quickly guide the conversation back to the sales topic.
+
+Generate 3 different persuasive sales responses that help close deals, address objections, and build value. Each response should be professional, confident, and focused on benefits and closing:`
+                : `Customer said: "${captured}". 
+
+SUPPORT MODE INSTRUCTIONS:
+- Empathetic, problem-solving tone
+- Give clear instructions or next steps
+- Keep it simple and easy to understand
+- Always give 1 response only
+
+Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
               
-              const { responseText } = await runGpt({ transcript: prompt, mode });
+              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode });
               
               if (responseText) {
-                // Parse response into 3 suggestions
+                // Parse response based on current mode
                 const lines = responseText.split('\n').filter(line => line.trim());
-                const suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                const maxResponses = currentMode === "sales" ? 3 : 1;
+                console.log(`🎯 Generating ${maxResponses} response(s) for ${currentMode} mode`);
+                const suggestions = lines.slice(0, maxResponses).map((suggestion, index) => ({
                   id: index + 1,
                   text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
                   timestamp: Date.now()
                 }));
                 
+                console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
+                
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Set Good Answer A as the main answer and auto-play it
+                  // Set first answer as the main answer and auto-play it
                   const firstAnswer = suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();
@@ -1028,7 +1104,7 @@ export default function PredatorDashboard() {
               Mode
               <select
                 value={mode}
-                onChange={(e) => setMode(e.target.value)}
+                onChange={(e) => handleModeChange(e.target.value)}
                 className={`mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer ${
                   mode === 'sales' ? 'bg-green-50 border-green-300' : 'bg-blue-50 border-blue-300'
                 }`}
@@ -1039,7 +1115,7 @@ export default function PredatorDashboard() {
               <span className={`text-xs mt-1 font-semibold ${
                 mode === 'sales' ? 'text-green-600' : 'text-blue-600'
               }`}>
-                {mode === 'sales' ? '🎯 Sales Mode Active' : '🛠️ Support Mode Active'}
+                {mode === 'sales' ? '🎯 Sales Mode: 3 Responses, Professional & Confident' : '🛠️ Support Mode: 1 Response, Empathetic & Problem-Solving'}
               </span>
             </label>
           </div>
@@ -1171,7 +1247,7 @@ export default function PredatorDashboard() {
                 }`}
                 onClick={() => selectCoachingSuggestion(suggestion)}
               >
-                Good Answer {String.fromCharCode(65 + index)}
+                {mode === "sales" ? `Good Answer ${String.fromCharCode(65 + index)}` : "Support Response"}
               </button>
             ))}
           </div>
