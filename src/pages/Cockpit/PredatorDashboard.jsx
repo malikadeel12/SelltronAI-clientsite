@@ -44,6 +44,8 @@ export default function PredatorDashboard() {
   const [coachingSuggestions, setCoachingSuggestions] = useState([]);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [micReactivated, setMicReactivated] = useState(false);
   const isTtsPlayingRef = useRef(false);
   const [isAskGptProcessing, setIsAskGptProcessing] = useState(false);
   const [predatorAnswerRefreshing, setPredatorAnswerRefreshing] = useState(false);
@@ -317,14 +319,41 @@ Generate 1 empathetic support response that solves problems, shows understanding
               
               if (responseText) {
                 // Parse response based on current mode
-                const lines = responseText.split('\n').filter(line => line.trim());
-                const maxResponses = currentMode === "sales" ? 3 : 1;
-                console.log(`🎯 Generating ${maxResponses} response(s) for ${currentMode} mode`);
-                const suggestions = lines.slice(0, maxResponses).map((suggestion, index) => ({
-                  id: index + 1,
-                  text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                  timestamp: Date.now()
-                }));
+                let suggestions = [];
+                
+                if (currentMode === "sales") {
+                  // For sales mode, check if we have database responses (format: "Response A: ...")
+                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                    // Parse database responses
+                    const responseLines = responseText.split('\n').filter(line => line.trim());
+                    suggestions = responseLines.map((line, index) => {
+                      const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                      return {
+                        id: index + 1,
+                        text: text,
+                        timestamp: Date.now()
+                      };
+                    });
+                    console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
+                  } else {
+                    // Fallback to original parsing for non-database responses
+                    const lines = responseText.split('\n').filter(line => line.trim());
+                    suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                      id: index + 1,
+                      text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+                      timestamp: Date.now()
+                    }));
+                    console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
+                  }
+                } else {
+                  // Support mode - single response
+                  suggestions = [{
+                    id: 1,
+                    text: responseText.trim(),
+                    timestamp: Date.now()
+                  }];
+                  console.log(`🎯 Generated 1 response for support mode`);
+                }
                 
                 console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
                 
@@ -333,8 +362,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   // Set first answer as the main answer and auto-play it
                   const firstAnswer = suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
-                  triggerRefreshAnimation();
-                  
+                  triggerRefreshAnimation();                  
                   if (speechActive) {
                     // Use TTS with selected voice for better quality
                     try {
@@ -374,42 +402,22 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
-                          // Restart live recognition after TTS ends
-                          if (streaming) {
-                            setTimeout(() => {
-                              if (streaming) {
-                                console.log("🔄 Restarting recognition after TTS...");
-                                if (!recognitionRef.current) {
-                                  startRealTimeRecognition();
-                                  setIsVoiceActive(true); // Ensure mic is active
-                                } else {
-                                  // Force restart existing recognition
-                                  try {
-                                    recognitionRef.current.stop();
-                                  } catch (e) {
-                                    console.log("Error stopping recognition:", e);
-                                  }
-                                  setTimeout(() => {
-                                    if (streaming) {
-                                      startRealTimeRecognition();
-                                      setIsVoiceActive(true); // Ensure mic is active
-                                    }
-                                  }, 100);
-                                }
-                              }
-                            }, 200); // Reduced delay
-                          }
+                          // Mic stays active - no need to restart recognition
+                          console.log("🔊 TTS ended - mic remains active for next query");
+                          setMicReactivated(true);
+                          setTimeout(() => setMicReactivated(false), 2000);
+                          showToast("🎤 Mic is ready - speak your next query!");
                         };
                         audio.play().catch(e => {
                           console.error("TTS audio playback failed:", e);
-                          speakText(firstAnswer);
+                          speakText(responseText);
                         });
                       } else {
-                        speakText(firstAnswer);
+                        speakText(responseText);
                       }
                     } catch (ttsError) {
                       console.error("TTS failed:", ttsError);
-                      speakText(firstAnswer);
+                      speakText(responseText);
                     }
                   }
                 }
@@ -636,29 +644,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
       console.log("🔊 Browser TTS ended, streaming:", streaming);
       // DON'T set isVoiceActive to false - keep mic always on
       setIsTtsPlaying(false);
-      // Restart live recognition after browser TTS ends
-      if (streaming) {
-        setTimeout(() => {
-          if (streaming) {
-            console.log("🔄 Restarting recognition after browser TTS...");
-            if (!recognitionRef.current) {
-              startRealTimeRecognition();
-            } else {
-              // Force restart existing recognition
-              try {
-                recognitionRef.current.stop();
-              } catch (e) {
-                console.log("Error stopping recognition:", e);
-              }
-              setTimeout(() => {
-                if (streaming) {
-                  startRealTimeRecognition();
-                }
-              }, 100);
-            }
-          }
-        }, 200); // Reduced delay
-      }
+      // Mic stays active - no need to restart recognition
+      console.log("🔊 Browser TTS ended - mic remains active for next query");
+      setMicReactivated(true);
+      setTimeout(() => setMicReactivated(false), 2000);
+      showToast("🎤 Mic is ready - speak your next query!");
     };
     utter.onerror = () => {
       console.log("🔊 Browser TTS error occurred");
@@ -686,24 +676,25 @@ Generate 1 empathetic support response that solves problems, shows understanding
         setLiveTranscript("Listening...");
         setIsVoiceActive(true); // Mic is listening
         
-        // Only stop audio if TTS is not playing
+        // Only stop audio if TTS is not actively playing - allow TTS to continue
         console.log("🔇 Checking TTS state:", isTtsPlaying, "TTS ref:", isTtsPlayingRef.current, "Current audio:", currentAudioRef.current);
         if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
-          console.log("🔇 Stopping audio because TTS is not playing");
-          stopAllAudio();
-          setPredatorAnswer("");
-          setCoachingSuggestions([]);
-          setTranscript("");
+          console.log("🔇 No TTS playing - mic is ready for new input");
         } else {
-          console.log("🔇 Not stopping audio because TTS is playing or audio exists");
+          console.log("🔇 TTS is playing - mic will listen but won't interrupt until user speaks");
         }
+        // Don't clear response here - let it stay visible until user speaks
+        setTranscript("");
         
-        showToast("🎤 Mic is listening - speak anytime!");
+        showToast("🎤 Mic is listening - speak anytime! (Response stays visible until you speak)");
         console.log("✅ Mic state: isVoiceActive = true, streaming = true");
         console.log("🔄 Recognition instance:", recognition);
       };
       
       recognition.onresult = (event) => {
+        // Always process speech input - mic stays active during TTS
+        console.log("🎤 Speech detected - processing input");
+        
         let interimTranscript = '';
         let finalTranscript = '';
         
@@ -726,11 +717,18 @@ Generate 1 empathetic support response that solves problems, shows understanding
         
         // Update live transcript with both final and interim results
         if (finalTranscript) {
+          // If TTS is playing and user is speaking, stop TTS immediately
+          if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
+            console.log("🔇 User is speaking - stopping current TTS response");
+            stopAllAudio();
+          }
+          
           // Use only new speech content, don't append to old transcript
           setTranscript(finalTranscript);
           setLiveTranscript(finalTranscript + interimTranscript);
           
-          // Debounce silence: after ~1s of no more finals, call GPT and update answer
+          // Debounce silence: after ~3s of no more finals, call GPT and update answer
+          // Increased from 1s to 3s to allow for longer queries
           if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current);
           }
@@ -738,6 +736,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
           const speedTimer = startSpeedTimer();
           silenceTimeoutRef.current = setTimeout(async () => {
             try {
+              setIsProcessing(true);
               // Stop any playing audio before processing new response
               stopAllAudio();
               
@@ -770,14 +769,41 @@ Generate 1 empathetic support response that solves problems, shows understanding
               
               if (responseText) {
                 // Parse response based on current mode
-                const lines = responseText.split('\n').filter(line => line.trim());
-                const maxResponses = currentMode === "sales" ? 3 : 1;
-                console.log(`🎯 Generating ${maxResponses} response(s) for ${currentMode} mode`);
-                const suggestions = lines.slice(0, maxResponses).map((suggestion, index) => ({
-                  id: index + 1,
-                  text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                  timestamp: Date.now()
-                }));
+                let suggestions = [];
+                
+                if (currentMode === "sales") {
+                  // For sales mode, check if we have database responses (format: "Response A: ...")
+                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                    // Parse database responses
+                    const responseLines = responseText.split('\n').filter(line => line.trim());
+                    suggestions = responseLines.map((line, index) => {
+                      const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                      return {
+                        id: index + 1,
+                        text: text,
+                        timestamp: Date.now()
+                      };
+                    });
+                    console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
+                  } else {
+                    // Fallback to original parsing for non-database responses
+                    const lines = responseText.split('\n').filter(line => line.trim());
+                    suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                      id: index + 1,
+                      text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+                      timestamp: Date.now()
+                    }));
+                    console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
+                  }
+                } else {
+                  // Support mode - single response
+                  suggestions = [{
+                    id: 1,
+                    text: responseText.trim(),
+                    timestamp: Date.now()
+                  }];
+                  console.log(`🎯 Generated 1 response for support mode`);
+                }
                 
                 console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
                 
@@ -827,42 +853,22 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
-                          // Restart live recognition after TTS ends
-                          if (streaming) {
-                            setTimeout(() => {
-                              if (streaming) {
-                                console.log("🔄 Restarting recognition after TTS...");
-                                if (!recognitionRef.current) {
-                                  startRealTimeRecognition();
-                                  setIsVoiceActive(true); // Ensure mic is active
-                                } else {
-                                  // Force restart existing recognition
-                                  try {
-                                    recognitionRef.current.stop();
-                                  } catch (e) {
-                                    console.log("Error stopping recognition:", e);
-                                  }
-                                  setTimeout(() => {
-                                    if (streaming) {
-                                      startRealTimeRecognition();
-                                      setIsVoiceActive(true); // Ensure mic is active
-                                    }
-                                  }, 100);
-                                }
-                              }
-                            }, 200); // Reduced delay
-                          }
+                          // Mic stays active - no need to restart recognition
+                          console.log("🔊 TTS ended - mic remains active for next query");
+                          setMicReactivated(true);
+                          setTimeout(() => setMicReactivated(false), 2000);
+                          showToast("🎤 Mic is ready - speak your next query!");
                         };
                         audio.play().catch(e => {
                           console.error("TTS audio playback failed:", e);
-                          speakText(firstAnswer);
+                          speakText(responseText);
                         });
                       } else {
-                        speakText(firstAnswer);
+                        speakText(responseText);
                       }
                     } catch (ttsError) {
                       console.error("TTS failed:", ttsError);
-                      speakText(firstAnswer);
+                      speakText(responseText);
                     }
                   }
                 }
@@ -871,12 +877,18 @@ Generate 1 empathetic support response that solves problems, shows understanding
               console.error('GPT after-silence error:', err);
               showToast('GPT failed');
             } finally {
+              setIsProcessing(false);
               endSpeedTimer(speedTimer);
             }
-          }, 1000);
-        } else {
+          }, 3000); // Increased from 1000ms to 3000ms to allow for longer queries
+        } else if (interimTranscript) {
           // Show interim results - use only interim content
           setLiveTranscript(interimTranscript);
+          // Clear any pending silence timeout when user is actively speaking
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+          // Note: Audio stopping is now handled at the beginning of onresult
         }
       };
       
@@ -888,7 +900,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
       };
       
       recognition.onend = () => {
-        console.log("🎤 Recognition ended, streaming:", streaming, "manuallyStopped:", manuallyStoppedRef.current);
+        console.log("🎤 Recognition ended, streaming:", streaming, "manuallyStopped:", manuallyStoppedRef.current, "TTS playing:", isTtsPlaying || isTtsPlayingRef.current);
         // Only restart recognition if it wasn't manually stopped
         if (!manuallyStoppedRef.current) {
           setTimeout(() => {
@@ -918,7 +930,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 startRealTimeRecognition();
               }, 1000);
             }
-          }, 5000); // Increased delay to 5 seconds to allow TTS to complete
+          }, 1000); // Quick restart to maintain continuous listening
         } else {
           console.log("🛑 Recognition not restarted - was manually stopped");
         }
@@ -1072,12 +1084,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
           <div className="flex gap-2 mb-3">
             <button
               className={`cursor-pointer border rounded-lg px-4 py-1.5 shadow w-full sm:w-auto ${
-                streaming ? 'bg-green-100 border-green-400 text-green-700' : 'hover:bg-[#f5f5f5]'
+                streaming ? (isProcessing ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : (isTtsPlaying || isTtsPlayingRef.current) ? 'bg-blue-100 border-blue-400 text-blue-700' : micReactivated ? 'bg-green-200 border-green-500 text-green-800 animate-pulse' : 'bg-green-100 border-green-400 text-green-700') : 'hover:bg-[#f5f5f5]'
               }`}
               onClick={startRealTimeRecognition}
               disabled={streaming}
             >
-              {streaming ? '🎤 Listening...' : 'Start Live Mic'}
+              {streaming ? (isProcessing ? '🔄 Processing...' : (isTtsPlaying || isTtsPlayingRef.current) ? '🔊 AI Speaking' : micReactivated ? '🎤 Ready!' : '🎤 Auto-Listening') : 'Start Live Mic'}
             </button>
             <button
               className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow w-full sm:w-auto"
@@ -1157,9 +1169,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
             value={liveTranscript}
             onChange={(e) => setLiveTranscript(e.target.value)}
             className={`w-full flex-1 border-2 rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto ${
-              streaming ? 'border-green-400 bg-green-50' : 'border-[#D72638]'
+              streaming ? (isProcessing ? 'border-yellow-400 bg-yellow-50' : (isTtsPlaying || isTtsPlayingRef.current) ? 'border-blue-400 bg-blue-50' : 'border-green-400 bg-green-50') : 'border-[#D72638]'
             }`}
-            placeholder={streaming ? "🎤 Mic is listening... Speak now!" : "Click 'Start Live Mic' to begin listening..."}
+            placeholder={streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
           />
         </div>
 
