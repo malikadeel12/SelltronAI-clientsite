@@ -322,9 +322,56 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 let suggestions = [];
                 
                 if (currentMode === "sales") {
-                  // For sales mode, check if we have database responses (format: "Response A: ...")
-                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse database responses
+                  // For sales mode, check if we have multiple questions format
+                  if (responseText.includes("Question 1:") && responseText.includes("Response A:")) {
+                    // Parse multiple questions format and group responses by type (A, B, C)
+                    const questionMatches = responseText.match(/Question \d+:\s*([^?]*\?)/g);
+                    const questionBlocks = responseText.split(/Question \d+:/).filter(block => block.trim());
+                    
+                    // Group responses by type across all questions
+                    const responsesByType = { A: [], B: [], C: [] };
+                    
+                    questionBlocks.forEach((block, blockIndex) => {
+                      const lines = block.split('\n').filter(line => line.trim());
+                      const questionText = questionMatches && questionMatches[blockIndex] 
+                        ? questionMatches[blockIndex].replace(/Question \d+:\s*/, '').trim()
+                        : `Question ${blockIndex + 1}`;
+                      
+                      lines.forEach((line, lineIndex) => {
+                        if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
+                          const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                          if (text) {
+                            const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
+                            responsesByType[responseType].push({
+                              questionText: questionText,
+                              responseText: text
+                            });
+                          }
+                        }
+                      });
+                    });
+                    
+                    // Create combined suggestions grouped by response type
+                    suggestions = [];
+                    ['A', 'B', 'C'].forEach(type => {
+                      if (responsesByType[type].length > 0) {
+                        // Combine all responses of this type
+                        const combinedText = responsesByType[type]
+                          .map((item, index) => `${item.questionText}\n${item.responseText}`)
+                          .join('\n\n');
+                        
+                        suggestions.push({
+                          id: suggestions.length + 1,
+                          text: combinedText,
+                          timestamp: Date.now(),
+                          responseType: type,
+                          isCombinedResponse: true
+                        });
+                      }
+                    });
+                    console.log(`🎯 Parsed ${suggestions.length} combined responses from ${questionBlocks.length} questions for sales mode`);
+                  } else if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                    // Parse single question database responses
                     const responseLines = responseText.split('\n').filter(line => line.trim());
                     suggestions = responseLines.map((line, index) => {
                       const text = line.replace(/^Response [ABC]:\s*/, '').trim();
@@ -359,8 +406,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Set first answer as the main answer and auto-play it
-                  const firstAnswer = suggestions[0].text;
+                  // Set first actual response (not question header) as the main answer and auto-play it
+                  const firstResponse = suggestions.find(s => !s.isQuestionHeader);
+                  const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();                  
                   if (speechActive) {
@@ -772,9 +820,56 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 let suggestions = [];
                 
                 if (currentMode === "sales") {
-                  // For sales mode, check if we have database responses (format: "Response A: ...")
-                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse database responses
+                  // For sales mode, check if we have multiple questions format
+                  if (responseText.includes("Question 1:") && responseText.includes("Response A:")) {
+                    // Parse multiple questions format and group responses by type (A, B, C)
+                    const questionMatches = responseText.match(/Question \d+:\s*([^?]*\?)/g);
+                    const questionBlocks = responseText.split(/Question \d+:/).filter(block => block.trim());
+                    
+                    // Group responses by type across all questions
+                    const responsesByType = { A: [], B: [], C: [] };
+                    
+                    questionBlocks.forEach((block, blockIndex) => {
+                      const lines = block.split('\n').filter(line => line.trim());
+                      const questionText = questionMatches && questionMatches[blockIndex] 
+                        ? questionMatches[blockIndex].replace(/Question \d+:\s*/, '').trim()
+                        : `Question ${blockIndex + 1}`;
+                      
+                      lines.forEach((line, lineIndex) => {
+                        if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
+                          const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                          if (text) {
+                            const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
+                            responsesByType[responseType].push({
+                              questionText: questionText,
+                              responseText: text
+                            });
+                          }
+                        }
+                      });
+                    });
+                    
+                    // Create combined suggestions grouped by response type
+                    suggestions = [];
+                    ['A', 'B', 'C'].forEach(type => {
+                      if (responsesByType[type].length > 0) {
+                        // Combine all responses of this type
+                        const combinedText = responsesByType[type]
+                          .map((item, index) => `${item.questionText}\n${item.responseText}`)
+                          .join('\n\n');
+                        
+                        suggestions.push({
+                          id: suggestions.length + 1,
+                          text: combinedText,
+                          timestamp: Date.now(),
+                          responseType: type,
+                          isCombinedResponse: true
+                        });
+                      }
+                    });
+                    console.log(`🎯 Parsed ${suggestions.length} combined responses from ${questionBlocks.length} questions for sales mode`);
+                  } else if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                    // Parse single question database responses
                     const responseLines = responseText.split('\n').filter(line => line.trim());
                     suggestions = responseLines.map((line, index) => {
                       const text = line.replace(/^Response [ABC]:\s*/, '').trim();
@@ -809,8 +904,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Set first answer as the main answer and auto-play it
-                  const firstAnswer = suggestions[0].text;
+                  // Set first actual response (not question header) as the main answer and auto-play it
+                  const firstResponse = suggestions.find(s => !s.isQuestionHeader);
+                  const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();
                   
@@ -1251,17 +1347,52 @@ Generate 1 empathetic support response that solves problems, shows understanding
             ))}
           </div> */}
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            {coachingSuggestions.map((suggestion, index) => (
-              <button
-                key={suggestion.id}
-                className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow flex-1 font-medium transition-all duration-500 ${
-                  coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
-                }`}
-                onClick={() => selectCoachingSuggestion(suggestion)}
-              >
-                {mode === "sales" ? `Good Answer ${String.fromCharCode(65 + index)}` : "Support Response"}
-              </button>
-            ))}
+            {coachingSuggestions.map((suggestion, index) => {
+              // Check if this is a combined response from multiple questions
+              if (suggestion.isCombinedResponse) {
+                return (
+                  <button
+                    key={suggestion.id}
+                    className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
+                      coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
+                    }`}
+                    onClick={() => selectCoachingSuggestion(suggestion)}
+                  >
+                    Good Answer {suggestion.responseType}
+                  </button>
+                );
+              }
+              
+              // Check if this is a question header (fallback for other formats)
+              if (suggestion.isQuestionHeader) {
+                return (
+                  <div key={suggestion.id} className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-lg">
+                    <h3 className="font-semibold text-blue-800 text-sm">
+                      {suggestion.text}
+                    </h3>
+                  </div>
+                );
+              }
+              
+              // Regular response button (fallback for single question format)
+              const responseLabel = suggestion.responseType 
+                ? `Good Answer ${suggestion.responseType}` 
+                : mode === "sales" 
+                  ? `Good Answer ${String.fromCharCode(65 + index)}` 
+                  : "Support Response";
+              
+              return (
+                <button
+                  key={suggestion.id}
+                  className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
+                    coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
+                  }`}
+                  onClick={() => selectCoachingSuggestion(suggestion)}
+                >
+                  {responseLabel}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
