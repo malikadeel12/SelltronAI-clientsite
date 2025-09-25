@@ -323,19 +323,15 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (currentMode === "sales") {
                   // For sales mode, check if we have multiple questions format
-                  if (responseText.includes("Question 1:") && responseText.includes("Response A:")) {
+                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
                     // Parse multiple questions format and group responses by type (A, B, C)
-                    const questionMatches = responseText.match(/Question \d+:\s*([^?]*\?)/g);
-                    const questionBlocks = responseText.split(/Question \d+:/).filter(block => block.trim());
+                    const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
                     
                     // Group responses by type across all questions
                     const responsesByType = { A: [], B: [], C: [] };
                     
                     questionBlocks.forEach((block, blockIndex) => {
                       const lines = block.split('\n').filter(line => line.trim());
-                      const questionText = questionMatches && questionMatches[blockIndex] 
-                        ? questionMatches[blockIndex].replace(/Question \d+:\s*/, '').trim()
-                        : `Question ${blockIndex + 1}`;
                       
                       lines.forEach((line, lineIndex) => {
                         if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
@@ -343,7 +339,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           if (text) {
                             const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
                             responsesByType[responseType].push({
-                              questionText: questionText,
                               responseText: text
                             });
                           }
@@ -355,9 +350,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     suggestions = [];
                     ['A', 'B', 'C'].forEach(type => {
                       if (responsesByType[type].length > 0) {
-                        // Combine all responses of this type
+                        // Combine all responses of this type (only answers, no questions)
                         const combinedText = responsesByType[type]
-                          .map((item, index) => `${item.questionText}\n${item.responseText}`)
+                          .map((item, index) => item.responseText)
                           .join('\n\n');
                         
                         suggestions.push({
@@ -821,19 +816,15 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (currentMode === "sales") {
                   // For sales mode, check if we have multiple questions format
-                  if (responseText.includes("Question 1:") && responseText.includes("Response A:")) {
+                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
                     // Parse multiple questions format and group responses by type (A, B, C)
-                    const questionMatches = responseText.match(/Question \d+:\s*([^?]*\?)/g);
-                    const questionBlocks = responseText.split(/Question \d+:/).filter(block => block.trim());
+                    const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
                     
                     // Group responses by type across all questions
                     const responsesByType = { A: [], B: [], C: [] };
                     
                     questionBlocks.forEach((block, blockIndex) => {
                       const lines = block.split('\n').filter(line => line.trim());
-                      const questionText = questionMatches && questionMatches[blockIndex] 
-                        ? questionMatches[blockIndex].replace(/Question \d+:\s*/, '').trim()
-                        : `Question ${blockIndex + 1}`;
                       
                       lines.forEach((line, lineIndex) => {
                         if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
@@ -841,7 +832,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           if (text) {
                             const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
                             responsesByType[responseType].push({
-                              questionText: questionText,
                               responseText: text
                             });
                           }
@@ -853,9 +843,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     suggestions = [];
                     ['A', 'B', 'C'].forEach(type => {
                       if (responsesByType[type].length > 0) {
-                        // Combine all responses of this type
+                        // Combine all responses of this type (only answers, no questions)
                         const combinedText = responsesByType[type]
-                          .map((item, index) => `${item.questionText}\n${item.responseText}`)
+                          .map((item, index) => item.responseText)
                           .join('\n\n');
                         
                         suggestions.push({

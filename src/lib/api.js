@@ -1,11 +1,3 @@
-/**
- * Change Summary (MCP Context 7 Best Practices)
- * - Centralizes client API calls for the Voice pipeline (dummy backend).
- * - Added email verification API functions for signup flow.
- * - Why: Keep UI clean and allow easy replacement with real providers later.
- * - Related: `server/src/routes/voice.js` endpoints and `server/src/routes/auth.js` for email verification.
- */
-
 // Prefer env base URL in production; fallback to same-origin relative paths
 //const API_BASE="http://localhost:8000"
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
