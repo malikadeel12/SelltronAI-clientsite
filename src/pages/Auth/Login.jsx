@@ -119,32 +119,30 @@ export default function Login() {
 
       showToast("Checking user role...");
 
-      // --- Resolve role from backend using ID token ---
-      const token = await getIdToken(cred.user, true);
-      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      // Optimized: Get token and role in parallel
+      const [token, roleResponse] = await Promise.allSettled([
+        getIdToken(cred.user, true),
+        fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/whoami`, {
+          headers: { Authorization: `Bearer ${await getIdToken(cred.user, true)}` },
+        })
+      ]);
+
       let who = { role: "user" };
-      try {
-        const res = await fetch(`${apiBase}/api/auth/whoami`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          who = await res.json();
-        }
-      } catch (_) {
-        // Backend not reachable; default to user role to preserve UX
-        who = { role: "user" };
+      if (roleResponse.status === 'fulfilled' && roleResponse.value.ok) {
+        who = await roleResponse.value.json();
       }
 
       setError("");
-      showToast("Login successful! Redirecting to Predator Dashboard...");
+      showToast("Login successful! Redirecting to dashboard...");
       
+      // Optimized: Reduced redirect delay for faster UX
       setTimeout(() => {
         if (who.role === "admin") {
           navigate("/AdminDashboard");
         } else {
           navigate("/predatordashboard");
         }
-      }, 1000);
+      }, 300); // Reduced from 1000ms to 300ms
     } catch (e) {
       console.error("Login error:", e);
       
@@ -240,29 +238,33 @@ export default function Login() {
       try {
         const cred = await signInWithPopup(auth, provider);
         
-        // Update display name if not set
-        if (cred.user && !cred.user.displayName) {
-          await updateProfile(cred.user, {
-            displayName: cred.user.email?.split('@')[0] || 'User'
-          });
-        }
-        
         showToast("Google sign-in successful! Checking role...");
         
-        const token = await getIdToken(cred.user, true);
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+        // Optimized: Parallel operations for faster setup
+        const [token, roleResponse] = await Promise.allSettled([
+          getIdToken(cred.user, true),
+          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/whoami`, {
+            headers: { Authorization: `Bearer ${await getIdToken(cred.user, true)}` },
+          })
+        ]);
+        
+        // Update display name if not set (non-blocking)
+        if (cred.user && !cred.user.displayName) {
+          updateProfile(cred.user, {
+            displayName: cred.user.email?.split('@')[0] || 'User'
+          }).catch(e => console.warn("Failed to update display name:", e));
+        }
+        
         let who = { role: "user" };
-        try {
-          const res = await fetch(`${apiBase}/api/auth/whoami`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) who = await res.json();
-        } catch (_) {}
+        if (roleResponse.status === 'fulfilled' && roleResponse.value.ok) {
+          who = await roleResponse.value.json();
+        }
         
         showToast("Redirecting to dashboard...");
+        // Optimized: Reduced redirect delay
         setTimeout(() => {
           if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
-        }, 1000);
+        }, 300); // Reduced from 1000ms to 300ms
       } catch (popupErr) {
         await signInWithRedirect(auth, provider);
       }

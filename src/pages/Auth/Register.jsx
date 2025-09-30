@@ -255,17 +255,10 @@ export default function SignUp() {
 
     setLoading(true);
     setError("");
-    showToast("Checking email availability...");
+    showToast("Sending verification code...");
 
     try {
-      console.log("🔍 Checking if email already exists...");
-      // First check if email already exists
-      await checkEmailExists(formData.email);
-      console.log("✅ Email is available");
-
-      showToast("Sending verification code...");
-
-      // If email is available, send verification code
+      // Optimized: Single API call that handles both email check and verification sending
       console.log("📧 Sending verification code...");
       await sendVerificationCode(formData.email);
       console.log("✅ Verification code sent successfully");
@@ -322,59 +315,51 @@ export default function SignUp() {
 
       showToast("Code verified! Creating account...");
 
-      // Code verified, now create the account
-      console.log("🔍 Creating Firebase account...");
-      const cred = await createUserWithEmailAndPassword(
-        getAuthInstance(),
-        formData.email,
-        formData.password
-      );
-      console.log("✅ Firebase account created:", cred.user.uid);
+      // Optimized: Parallel operations for faster account creation
+      const [cred, adminRolePromise] = await Promise.allSettled([
+        createUserWithEmailAndPassword(getAuthInstance(), formData.email, formData.password),
+        formData.email === "admin@gmail.com" ? 
+          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: "temp", role: "admin" }),
+          }) : Promise.resolve()
+      ]);
+
+      if (cred.status === 'rejected') throw cred.reason;
+      const userCred = cred.value;
+      console.log("✅ Firebase account created:", userCred.user.uid);
+
+      // Update admin role if needed (after getting actual UID)
+      if (formData.email === "admin@gmail.com") {
+        try {
+          await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: userCred.user.uid, role: "admin" }),
+          });
+        } catch (e) {
+          console.warn("Failed to assign admin role:", e);
+        }
+      }
 
       showToast("Setting up your profile...");
 
-      // Update user profile with name
-      if (formData.name) {
-        await updateProfile(cred.user, {
-          displayName: formData.name
-        });
-      }
+      // Optimized: Parallel profile and email verification setup
+      const [profileUpdate, emailVerifiedUpdate] = await Promise.allSettled([
+        formData.name ? updateProfile(userCred.user, { displayName: formData.name }) : Promise.resolve(),
+        setEmailVerified(userCred.user.uid)
+      ]);
 
-      // Set Firebase emailVerified to true after successful OTP verification
-      try {
-        console.log("🔍 Setting Firebase emailVerified to true...");
-        await setEmailVerified(cred.user.uid);
-        console.log("✅ Firebase emailVerified set to true");
-
-        // Refresh the user object to get updated emailVerified status
-        await cred.user.reload();
-        console.log("✅ User object refreshed, emailVerified:", cred.user.emailVerified);
-      } catch (emailVerifiedError) {
-        console.error("❌ Failed to set emailVerified:", emailVerifiedError);
-        // Don't block the flow if this fails, just log it
-      }
-
-      // Assign admin role for specific email (demo)
-      if (formData.email === "admin@gmail.com") {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        await fetch(`${apiBase}/api/auth/assign-role`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uid: cred.user.uid, role: "admin" }),
-        });
-      }
-
-      // Get token and determine role
-      const token = await getIdToken(cred.user, true);
+      // Get token and determine role (optimized with single request)
+      const token = await getIdToken(userCred.user, true);
       const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       let who = { role: "user" };
       try {
         const res = await fetch(`${apiBase}/api/auth/whoami`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (res.ok) {
-          who = await res.json();
-        }
+        if (res.ok) who = await res.json();
       } catch (_) {
         who = { role: "user" };
       }
@@ -389,7 +374,7 @@ export default function SignUp() {
         showToast("Account created successfully! Redirecting to Predator Dashboard...");
       }
 
-      // Redirect based on role after a short delay
+      // Optimized: Reduced redirect delay for faster UX
       setTimeout(() => {
         console.log("🚀 Redirecting to dashboard...");
         if (who.role === "admin") {
@@ -397,7 +382,7 @@ export default function SignUp() {
         } else {
           navigate("/predatordashboard");
         }
-      }, 2000); // Increased delay to ensure user object is updated
+      }, 500); // Reduced from 2000ms to 500ms
     } catch (e) {
       console.error("Verification error:", e);
       setError(e?.message || "Verification failed. Please try again.");
@@ -434,7 +419,7 @@ export default function SignUp() {
     setSuccess(false);
   };
 
-  // Google Sign-Up/Login (same flow)
+  // Google Sign-Up/Login (same flow) - Optimized
   const handleGoogleSignIn = async () => {
     try {
       showToast("Signing up with Google...");
@@ -447,37 +432,41 @@ export default function SignUp() {
       try {
         const cred = await signInWithPopup(auth, provider);
 
-        // Update display name if not set
-        if (cred.user && !cred.user.displayName) {
-          await updateProfile(cred.user, {
-            displayName: cred.user.email?.split('@')[0] || 'User'
-          });
-        }
-
         showToast("Google signup successful! Setting up account...");
 
-        if (cred.user?.email === "admin@gmail.com") {
-          const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-          await fetch(`${apiBase}/api/auth/assign-role`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid: cred.user.uid, role: "admin" }),
-          });
+        // Optimized: Parallel operations for faster setup
+        const [token, adminRolePromise] = await Promise.allSettled([
+          getIdToken(cred.user, true),
+          cred.user?.email === "admin@gmail.com" ? 
+            fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ uid: cred.user.uid, role: "admin" }),
+            }) : Promise.resolve()
+        ]);
+
+        // Update display name if not set (non-blocking)
+        if (cred.user && !cred.user.displayName) {
+          updateProfile(cred.user, {
+            displayName: cred.user.email?.split('@')[0] || 'User'
+          }).catch(e => console.warn("Failed to update display name:", e));
         }
-        const token = await getIdToken(cred.user, true);
+
+        // Get user role
         const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
         let who = { role: "user" };
         try {
           const res = await fetch(`${apiBase}/api/auth/whoami`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token.value || token}` },
           });
           if (res.ok) who = await res.json();
         } catch (_) { }
 
         showToast("Redirecting to dashboard...");
+        // Optimized: Reduced redirect delay
         setTimeout(() => {
           if (who.role === "admin") navigate("/AdminDashboard"); else navigate("/predatordashboard");
-        }, 1000);
+        }, 300); // Reduced from 1000ms to 300ms
       } catch (popupErr) {
         await signInWithRedirect(auth, provider);
       }

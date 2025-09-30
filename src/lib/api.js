@@ -1,8 +1,30 @@
 // Prefer env base URL in production; fallback to same-origin relative paths
 //const API_BASE="http://localhost:8000"
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
-// --- Helper: JSON POST ---
+
+// Optimized: Request cache to reduce redundant API calls
+const requestCache = new Map();
+const CACHE_DURATION = 30000; // 30 seconds
+
+function getCacheKey(method, path, body) {
+  return `${method}:${path}:${JSON.stringify(body || {})}`;
+}
+
+function isCacheValid(timestamp) {
+  return Date.now() - timestamp < CACHE_DURATION;
+}
+
+// --- Helper: JSON POST with caching ---
 async function postJson(path, body) {
+  const cacheKey = getCacheKey('POST', path, body);
+  const cached = requestCache.get(cacheKey);
+  
+  // Return cached result if valid
+  if (cached && isCacheValid(cached.timestamp)) {
+    console.log(`🚀 Cache hit for ${path}`);
+    return cached.data;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,7 +41,15 @@ async function postJson(path, body) {
     }
   }
   
-  return res.json();
+  const data = await res.json();
+  
+  // Cache successful responses
+  requestCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  });
+  
+  return data;
 }
 
 // --- Helper: multipart POST ---
