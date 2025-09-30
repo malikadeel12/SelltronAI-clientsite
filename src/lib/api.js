@@ -1,6 +1,17 @@
 // Prefer env base URL in production; fallback to same-origin relative paths
-//const API_BASE="http://localhost:8000"
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : "";
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) 
+  ? import.meta.env.VITE_API_BASE_URL 
+  : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+    ? "http://localhost:8000" 
+    : ""; // For production, use relative paths
+
+// Debug logging for deployment issues
+console.log('🔧 API Configuration:', {
+  hostname: window.location.hostname,
+  envUrl: import.meta.env.VITE_API_BASE_URL,
+  finalApiBase: API_BASE,
+  isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+});
 
 // Optimized: Request cache to reduce redundant API calls
 const requestCache = new Map();
@@ -25,19 +36,26 @@ async function postJson(path, body) {
     return cached.data;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const fullUrl = `${API_BASE}${path}`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
   
   if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    console.error(`📡 Request URL: ${fullUrl}`);
+    console.error(`📦 Request body:`, body);
+    
     // Try to get error message from response
     try {
       const errorData = await res.json();
       throw new Error(errorData.error || `Request failed: ${res.status}`);
     } catch (parseError) {
-      throw new Error(`Request failed: ${res.status}`);
+      throw new Error(`Request failed: ${res.status} - ${res.statusText}`);
     }
   }
   

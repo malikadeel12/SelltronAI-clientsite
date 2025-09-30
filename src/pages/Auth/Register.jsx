@@ -205,7 +205,10 @@ export default function SignUp() {
         const result = await getRedirectResult(auth);
         if (result && result.user) {
           const token = await getIdToken(result.user, true);
-          const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+          const apiBase = import.meta.env.VITE_API_BASE_URL || 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+            ? "http://localhost:8000" 
+            : "";
           let who = { role: "user" };
           try {
             const res = await fetch(`${apiBase}/api/auth/whoami`, {
@@ -463,7 +466,10 @@ export default function SignUp() {
         }
 
         // Get user role
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+        const apiBase = import.meta.env.VITE_API_BASE_URL || 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+            ? "http://localhost:8000" 
+            : "";
         let who = { role: "user" };
         try {
           const res = await fetch(`${apiBase}/api/auth/whoami`, {
