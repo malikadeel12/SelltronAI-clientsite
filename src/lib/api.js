@@ -1,13 +1,6 @@
 // Use environment variable for API base URL with fallback to localhost
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 //const API_BASE ="http://localhost:7000";
-// Debug logging for deployment issues
-console.log('🔧 API Configuration:', {
-  hostname: window.location.hostname,
-  envUrl: import.meta.env.VITE_API_BASE_URL,
-  finalApiBase: API_BASE,
-  isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-});
 
 // Optimized: Request cache to reduce redundant API calls
 const requestCache = new Map();
