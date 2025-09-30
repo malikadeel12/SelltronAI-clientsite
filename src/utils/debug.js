@@ -16,7 +16,7 @@ export const debugApiConfiguration = () => {
     try {
       const apiBase = import.meta.env.VITE_API_BASE_URL || 
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-          ? "http://localhost:8000" 
+          ? "http://localhost:7000" 
           : "";
       
       const testUrl = `${apiBase}/api/auth/whoami`;

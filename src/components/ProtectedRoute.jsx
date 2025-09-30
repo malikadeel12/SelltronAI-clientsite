@@ -2,7 +2,7 @@ import React from 'react';
 import { useEffect, useState } from 'react';
 
 import { useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, getAuth } from 'firebase/auth';
+import { onAuthStateChanged, getAuth, getIdToken, reload } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -32,9 +32,42 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }) => {
           const timeDiff = (now - userCreationTime) / 1000; // seconds
           
           if (timeDiff < 30) {
-            // Newly created user, give them time for emailVerified to update
-            console.log('Newly created user, waiting for emailVerified to update...');
-            setEmailVerified(true); // Allow access temporarily
+            // Newly created user, try to reload user data to get latest emailVerified status
+            console.log('Newly created user, reloading user to check emailVerified status...');
+            try {
+              // Force user reload to get latest user data from Firebase
+              await reload(user);
+              console.log('✅ User reloaded successfully');
+              
+              // Re-check the user object after reload
+              const reloadedUser = auth.currentUser;
+              if (reloadedUser && reloadedUser.emailVerified) {
+                console.log('✅ Email verification confirmed after user reload');
+                setEmailVerified(true);
+              } else {
+                console.log('❌ Email still not verified after user reload');
+                // Don't allow access - redirect to login with verification message
+                navigate('/login', { 
+                  state: { 
+                    message: 'Please complete email verification before accessing the dashboard.',
+                    email: user.email,
+                    needsVerification: true
+                  } 
+                });
+                return;
+              }
+            } catch (error) {
+              console.warn('Failed to reload user:', error);
+              // Don't allow access if we can't verify status
+              navigate('/login', { 
+                state: { 
+                  message: 'Please complete email verification before accessing the dashboard.',
+                  email: user.email,
+                  needsVerification: true
+                } 
+              });
+              return;
+            }
           } else {
             // Existing user with unverified email
             navigate('/login', { 
@@ -46,6 +79,7 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }) => {
             return;
           }
         } else {
+          console.log('✅ Email is verified, allowing access');
           setEmailVerified(true);
         }
       }

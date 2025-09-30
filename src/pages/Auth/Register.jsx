@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import logo from "../../assets/mainlogo/logoicon.png";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithPopup, updateProfile, reload } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
 import { checkEmailExists, sendVerificationCode, verifyEmailCode, setEmailVerified } from "../../lib/api";
 import Timer from "../../components/Timer";
@@ -261,25 +261,34 @@ export default function SignUp() {
     showToast("Sending verification code...");
 
     try {
-      // Optimized: Single API call that handles both email check and verification sending
+      console.log("🚀 Starting verification process...");
+      console.log("📧 Email:", formData.email);
+      console.log("🌐 API Base URL:", import.meta.env.VITE_API_BASE_URL || "http://localhost:8000");
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Request timeout after 30 seconds")), 30000)
+      );
+      
+      const verificationPromise = sendVerificationCode(formData.email);
+      
       console.log("📧 Sending verification code...");
-      const result = await sendVerificationCode(formData.email);
-      console.log("✅ Verification code sent successfully");
+      const result = await Promise.race([verificationPromise, timeoutPromise]);
+      
+      console.log("✅ Verification code sent successfully:", result);
       setStep("verification");
       setTimerExpired(false);
       
-      // Check if fallback code is provided (for development)
-      if (result.fallbackCode) {
-        console.log(`🔑 Fallback code: ${result.fallbackCode}`);
-        showToast(`Verification code: ${result.fallbackCode} (Check console if email fails)`);
-      } else {
-        showToast("Verification code sent to your email!");
-        // For development: Also log to console
-        console.log(`📧 Email sent to: ${formData.email}`);
-        console.log(`🔑 If email doesn't arrive, check server console for the verification code`);
-      }
+      showToast("Verification code sent to your email!");
+      console.log(`📧 Email sent to: ${formData.email}`);
+      console.log(`🔑 Check your email inbox and spam folder for the verification code`);
     } catch (e) {
       console.error("❌ Signup error:", e);
+      console.error("❌ Error details:", {
+        message: e.message,
+        stack: e.stack,
+        name: e.name
+      });
 
       // Handle specific error cases with user-friendly messages
       let errorMessage = "Failed to send verification code. Please try again.";
@@ -298,6 +307,9 @@ export default function SignUp() {
       } else if (e?.message && e.message.includes("network")) {
         errorMessage = "Network error. Please check your internet connection.";
         toastMessage = "Network error";
+      } else if (e?.message && e.message.includes("timeout")) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+        toastMessage = "Request timeout";
       } else if (e?.message) {
         errorMessage = e.message;
         toastMessage = "Signup failed";
@@ -323,6 +335,11 @@ export default function SignUp() {
 
     try {
       console.log("🔍 Starting OTP verification...");
+      console.log(`📧 Email: ${formData.email}`);
+      console.log(`🔑 Code: ${verificationCode}`);
+      console.log(`🔑 Code length: ${verificationCode.length}`);
+      console.log(`🔑 Code type: ${typeof verificationCode}`);
+      
       await verifyEmailCode(formData.email, verificationCode);
       console.log("✅ OTP verified successfully");
 
@@ -358,13 +375,42 @@ export default function SignUp() {
 
       showToast("Setting up your profile...");
 
-      // Optimized: Parallel profile and email verification setup
-      const [profileUpdate, emailVerifiedUpdate] = await Promise.allSettled([
-        formData.name ? updateProfile(userCred.user, { displayName: formData.name }) : Promise.resolve(),
-        setEmailVerified(userCred.user.uid)
-      ]);
+      // First, ensure email verification is set in Firebase
+      try {
+        await setEmailVerified(userCred.user.uid);
+        console.log("✅ Email verification status updated in Firebase");
+      } catch (error) {
+        console.warn("Failed to update email verification status:", error);
+        // Continue anyway as the user is already verified via OTP
+      }
 
-      // Get token and determine role (optimized with single request)
+      // Update profile
+      if (formData.name) {
+        try {
+          await updateProfile(userCred.user, { displayName: formData.name });
+          console.log("✅ Profile updated successfully");
+        } catch (error) {
+          console.warn("Failed to update profile:", error);
+        }
+      }
+
+      // Force Firebase to reload user data to get latest emailVerified status
+      console.log("🔄 Reloading Firebase user to get latest auth state...");
+      try {
+        await reload(userCred.user);
+        console.log("✅ Firebase user reloaded successfully");
+        
+        // Check if emailVerified is now true
+        if (userCred.user.emailVerified) {
+          console.log("✅ Email verification confirmed after user reload");
+        } else {
+          console.log("⚠️ Email verification still not confirmed after reload, but proceeding");
+        }
+      } catch (error) {
+        console.warn("Failed to reload user, but proceeding:", error);
+      }
+
+      // Get fresh token and determine role
       const token = await getIdToken(userCred.user, true);
       const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       let who = { role: "user" };
@@ -387,15 +433,13 @@ export default function SignUp() {
         showToast("Account created successfully! Redirecting to Predator Dashboard...");
       }
 
-      // Optimized: Reduced redirect delay for faster UX
-      setTimeout(() => {
-        console.log("🚀 Redirecting to dashboard...");
-        if (who.role === "admin") {
-          navigate("/AdminDashboard");
-        } else {
-          navigate("/predatordashboard");
-        }
-      }, 500); // Reduced from 2000ms to 500ms
+      // Redirect immediately since we've confirmed verification
+      console.log("🚀 Redirecting to dashboard...");
+      if (who.role === "admin") {
+        navigate("/AdminDashboard");
+      } else {
+        navigate("/predatordashboard");
+      }
     } catch (e) {
       console.error("Verification error:", e);
       setError(e?.message || "Verification failed. Please try again.");
@@ -540,12 +584,9 @@ export default function SignUp() {
                 maxLength={6}
                 className="w-full border rounded-md px-3 py-2 text-center text-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
-              {/* Development: Show code in console */}
-              {process.env.NODE_ENV === 'development' && (
-                <p className="text-xs text-gray-500 mt-1">
-                  💡 Check browser console and server logs for the verification code
-                </p>
-              )}
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Check your email inbox and spam folder for the verification code
+              </p>
             </div>
 
             {error && <p className="text-[#D72638] text-xs mt-2 mb-3">{error}</p>}

@@ -1,9 +1,5 @@
-// Prefer env base URL in production; fallback to same-origin relative paths
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) 
-  ? import.meta.env.VITE_API_BASE_URL 
-  : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-    ? "http://localhost:8000" 
-    : ""; // For production, use relative paths
+// Use environment variable for API base URL with fallback to localhost
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
 
 // Debug logging for deployment issues
 console.log('🔧 API Configuration:', {
@@ -135,21 +131,105 @@ export async function runTts({ text, voice }) {
   return postJson(`/api/voice/tts`, { text, voice });
 }
 
-// --- Email Verification APIs ---
+// --- Email Verification APIs (No caching for auth operations) ---
 export async function checkEmailExists(email) {
-  return postJson(`/api/auth/check-email`, { email });
+  const fullUrl = `${API_BASE}/api/auth/check-email`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
 }
 
 export async function sendVerificationCode(email) {
-  return postJson(`/api/auth/send-verification`, { email });
+  const fullUrl = `${API_BASE}/api/auth/send-verification`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  console.log(`📧 Email being sent: ${email}`);
+  console.log(`🔧 API_BASE: ${API_BASE}`);
+  
+  try {
+    const res = await fetch(fullUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    
+    console.log(`📡 Response status: ${res.status} ${res.statusText}`);
+    console.log(`📡 Response headers:`, Object.fromEntries(res.headers.entries()));
+    
+    if (!res.ok) {
+      console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+      console.error(`📡 Request URL: ${fullUrl}`);
+      let errorData;
+      try {
+        errorData = await res.json();
+        console.error(`📦 Error response:`, errorData);
+      } catch (parseError) {
+        console.error(`📦 Could not parse error response:`, parseError);
+        errorData = { error: `Request failed: ${res.status}` };
+      }
+      throw new Error(errorData.error || `Request failed: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    console.log(`✅ API response successful:`, data);
+    return data;
+  } catch (error) {
+    console.error(`❌ API call failed:`, error);
+    throw error;
+  }
 }
 
 export async function verifyEmailCode(email, code) {
-  return postJson(`/api/auth/verify-email`, { email, code });
+  const fullUrl = `${API_BASE}/api/auth/verify-email`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  console.log(`📧 Verifying code for email: ${email}, code: ${code}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    console.error(`📦 Error response:`, errorData);
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  const result = await res.json();
+  console.log(`✅ Verification successful:`, result);
+  return result;
 }
 
 export async function setEmailVerified(uid) {
-  return postJson(`/api/auth/set-email-verified`, { uid });
+  const fullUrl = `${API_BASE}/api/auth/set-email-verified`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
 }
 
 
