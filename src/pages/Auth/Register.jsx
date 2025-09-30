@@ -260,11 +260,21 @@ export default function SignUp() {
     try {
       // Optimized: Single API call that handles both email check and verification sending
       console.log("📧 Sending verification code...");
-      await sendVerificationCode(formData.email);
+      const result = await sendVerificationCode(formData.email);
       console.log("✅ Verification code sent successfully");
       setStep("verification");
       setTimerExpired(false);
-      showToast("Verification code sent to your email!");
+      
+      // Check if fallback code is provided (for development)
+      if (result.fallbackCode) {
+        console.log(`🔑 Fallback code: ${result.fallbackCode}`);
+        showToast(`Verification code: ${result.fallbackCode} (Check console if email fails)`);
+      } else {
+        showToast("Verification code sent to your email!");
+        // For development: Also log to console
+        console.log(`📧 Email sent to: ${formData.email}`);
+        console.log(`🔑 If email doesn't arrive, check server console for the verification code`);
+      }
     } catch (e) {
       console.error("❌ Signup error:", e);
 
@@ -524,6 +534,12 @@ export default function SignUp() {
                 maxLength={6}
                 className="w-full border rounded-md px-3 py-2 text-center text-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
+              {/* Development: Show code in console */}
+              {process.env.NODE_ENV === 'development' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Check browser console and server logs for the verification code
+                </p>
+              )}
             </div>
 
             {error && <p className="text-[#D72638] text-xs mt-2 mb-3">{error}</p>}
