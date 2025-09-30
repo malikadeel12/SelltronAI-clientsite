@@ -5,29 +5,8 @@ console.log("API BASE 👉", import.meta.env.VITE_API_BASE_URL);
 //const API_BASE ="http://localhost:7000";
 
 
-// Optimized: Request cache to reduce redundant API calls
-const requestCache = new Map();
-const CACHE_DURATION = 30000; // 30 seconds
-
-function getCacheKey(method, path, body) {
-  return `${method}:${path}:${JSON.stringify(body || {})}`;
-}
-
-function isCacheValid(timestamp) {
-  return Date.now() - timestamp < CACHE_DURATION;
-}
-
-// --- Helper: JSON POST with caching ---
+// --- Helper: JSON POST without caching ---
 async function postJson(path, body) {
-  const cacheKey = getCacheKey('POST', path, body);
-  const cached = requestCache.get(cacheKey);
-  
-  // Return cached result if valid
-  if (cached && isCacheValid(cached.timestamp)) {
-    console.log(`🚀 Cache hit for ${path}`);
-    return cached.data;
-  }
-
   const fullUrl = `${API_BASE}${path}`;
   console.log(`🌐 Making API request to: ${fullUrl}`);
   
@@ -52,13 +31,6 @@ async function postJson(path, body) {
   }
   
   const data = await res.json();
-  
-  // Cache successful responses
-  requestCache.set(cacheKey, {
-    data,
-    timestamp: Date.now()
-  });
-  
   return data;
 }
 
