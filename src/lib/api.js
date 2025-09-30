@@ -1,5 +1,5 @@
 // Use environment variable for API base URL with fallback to localhost
-const API_BASE = import.meta.env.VITE_API_BASE_URL|| "https://selltronai-serverside.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 console.log("API BASE 👉", import.meta.env.VITE_API_BASE_URL);
 
 //const API_BASE ="http://localhost:7000";
