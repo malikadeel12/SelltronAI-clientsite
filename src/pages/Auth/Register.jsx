@@ -265,9 +265,9 @@ export default function SignUp() {
       console.log("📧 Email:", formData.email);
       console.log("🌐 API Base URL:", import.meta.env.VITE_API_BASE_URL || "http://localhost:8000");
       
-      // Add timeout to prevent hanging
+      // Add timeout to prevent hanging (increased for email sending)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Request timeout after 30 seconds")), 30000)
+        setTimeout(() => reject(new Error("Request timeout after 60 seconds")), 60000)
       );
       
       const verificationPromise = sendVerificationCode(formData.email);
@@ -308,8 +308,8 @@ export default function SignUp() {
         errorMessage = "Network error. Please check your internet connection.";
         toastMessage = "Network error";
       } else if (e?.message && e.message.includes("timeout")) {
-        errorMessage = "Request timed out. Please check your internet connection and try again.";
-        toastMessage = "Request timeout";
+        errorMessage = "Request timed out. Email may still be sending - check your inbox.";
+        toastMessage = "Request timeout - check your email";
       } else if (e?.message) {
         errorMessage = e.message;
         toastMessage = "Signup failed";
