@@ -50,12 +50,82 @@ export default function PredatorDashboard() {
   const [isAskGptProcessing, setIsAskGptProcessing] = useState(false);
   const [predatorAnswerRefreshing, setPredatorAnswerRefreshing] = useState(false);
   const [coachingButtonsRefreshing, setCoachingButtonsRefreshing] = useState(false);
+  const [showCoachingButtons, setShowCoachingButtons] = useState(true);
+  const [showLiveTranscript, setShowLiveTranscript] = useState(true);
   const [responseSpeed, setResponseSpeed] = useState(null);
   const [isProcessingFast, setIsProcessingFast] = useState(false);
   const manuallyStoppedRef = useRef(false);
+  // New state for conversation history
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [currentUserInput, setCurrentUserInput] = useState("");
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
+  
+  // Load Sales conversation history from localStorage (ignore support mode)
+  useEffect(() => {
+    if (mode === 'sales') {
+      const savedHistory = localStorage.getItem('predatorConversationHistory_sales');
+      if (savedHistory) {
+        try {
+          setConversationHistory(JSON.parse(savedHistory));
+        } catch (error) {
+          console.error('Error loading conversation history:', error);
+        }
+      } else {
+        setConversationHistory([]);
+      }
+    } else {
+      // Support mode - show empty history
+      setConversationHistory([]);
+    }
+  }, [mode]);
+
+  // Save Sales conversation history to localStorage whenever it changes
+  useEffect(() => {
+    if (conversationHistory.length > 0) {
+      localStorage.setItem('predatorConversationHistory_sales', JSON.stringify(conversationHistory));
+    }
+  }, [conversationHistory]);
+  
+  // Auto-scroll Predator Answer box to bottom when new content arrives
+  useEffect(() => {
+    const box = conversationBoxRef.current;
+    if (box) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }, [conversationHistory, predatorAnswer]);
+
+  // Function to add conversation entry (Sales only)
+  const addConversationEntry = (userInput, predatorResponse, suggestions = []) => {
+    if (modeRef.current !== 'sales') return; // do not store support mode history
+    const newEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString(),
+      userInput: userInput.trim(),
+      predatorResponse: predatorResponse.trim(),
+      responseA: suggestions.find(s => s.responseType === 'A')?.text || suggestions[0]?.text || '',
+      responseB: suggestions.find(s => s.responseType === 'B')?.text || suggestions[1]?.text || '',
+      responseC: suggestions.find(s => s.responseType === 'C')?.text || suggestions[2]?.text || '',
+      mode: 'sales' // Always tag as sales
+    };
+    setConversationHistory(prev => {
+      const updated = [...prev, newEntry];
+      // Save to Sales-only key
+      localStorage.setItem('predatorConversationHistory_sales', JSON.stringify(updated));
+      return updated;
+    });
+    // Keep current user input and predator response visible for current interaction
+    // They will be cleared when new speech starts
+  };
+
+  // Function to clear Sales conversation history
+  const clearConversationHistory = () => {
+    setConversationHistory([]);
+    localStorage.removeItem('predatorConversationHistory_sales');
+    showToast('Sales conversation history cleared');
+  };
+
   const defaultHints = useMemo(() => ([
     // Brand/Product terms (edit these for your domain)
     'Selltron', 'Predator', 'Cockpit', 'dashboard',
@@ -76,7 +146,8 @@ export default function PredatorDashboard() {
   const lastAutoSelectedSuggestionRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
   const lastGptResponseTimeRef = useRef(0);
-
+  const conversationBoxRef = useRef(null);
+  
   // Stop any active microphone inputs (live recognition or manual recording)
   const stopAllInput = () => {
     // Stop real-time recognition if running
@@ -99,7 +170,7 @@ export default function PredatorDashboard() {
     setTimeout(() => setToast({ show: false, message: "" }), 2000);
   };
 
-  // Function to stop all audio playback
+  // Function to stop all audio playback and mute microphone during AI speech
   const stopAllAudio = () => {
     console.log("🔇 Stopping all audio playback");
     
@@ -113,8 +184,28 @@ export default function PredatorDashboard() {
       currentAudioRef.current = null;
     }
     
-    // DON'T set isVoiceActive to false - keep mic ready for next input
-    console.log("🔇 All audio stopped - mic still ready");
+    // Mute microphone during AI speech to prevent feedback loop
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        console.log("🔇 Microphone muted during AI speech");
+      } catch (e) {
+        console.log("🔇 Microphone already stopped");
+      }
+    }
+    
+    console.log("🔇 All audio stopped - mic muted to prevent feedback");
+  };
+
+  // Function to restart microphone after AI speech ends
+  const restartMicrophone = () => {
+    console.log("🎤 Restarting microphone after AI speech ended");
+    if (streaming && !isTtsPlaying && !isTtsPlayingRef.current) {
+      setTimeout(() => {
+        startRealTimeRecognition();
+        showToast("🎤 Mic is ready - speak your next query!");
+      }, 500); // Small delay to ensure TTS has fully ended
+    }
   };
 
   const triggerConfetti = () => {
@@ -171,12 +262,26 @@ export default function PredatorDashboard() {
     setMode(newMode);
     modeRef.current = newMode; // Update ref immediately
     // Clear all previous responses immediately
-    setCoachingSuggestions([]);
+    // Keep coaching suggestions visible - don't clear them
     setPredatorAnswer("");
     setTranscript("");
     setLiveTranscript("");
+    // Clear current user input when switching modes
+    setCurrentUserInput("");
+    // Ensure buttons are always visible
+    setShowCoachingButtons(true);
     showToast(`Switched to ${newMode === 'sales' ? 'Sales Mode (3 responses)' : 'Support Mode (1 response)'}`);
   };
+
+  // Ensure buttons are always visible on mount
+  useEffect(() => {
+    setShowCoachingButtons(true);
+  }, []);
+
+  // Purge any existing Support history once
+  useEffect(() => {
+    localStorage.removeItem('predatorConversationHistory_support');
+  }, []);
 
   useEffect(() => {
     // Load available voices/modes from backend
@@ -201,8 +306,11 @@ export default function PredatorDashboard() {
     if (mode !== previousMode) {
       console.log(`🔄 Mode changed from ${previousMode} to ${mode} - clearing previous responses`);
       modeRef.current = mode; // Update ref when mode changes
-      setCoachingSuggestions([]);
+      // Keep coaching suggestions visible - don't clear them
       setPredatorAnswer("");
+      // Clear live transcript and current input when mode changes
+      setLiveTranscript("");
+      setCurrentUserInput("");
       setPreviousMode(mode);
       showToast(`Mode switched to ${mode === 'sales' ? 'Sales (3 responses)' : 'Support (1 response)'}`);
     }
@@ -286,7 +394,8 @@ export default function PredatorDashboard() {
               encoding: encodingRef.current,
               hints: defaultHints,
               boost: sttBoost,
-              sttModel
+              sttModel,
+              conversationHistory
             });
             
             if (t && t.trim()) {
@@ -315,7 +424,7 @@ SUPPORT MODE INSTRUCTIONS:
 
 Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
               
-              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode });
+              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode, conversationHistory });
               
               if (responseText) {
                 // Parse response based on current mode
@@ -401,11 +510,27 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
+                  // Switch to conversation history view when response arrives (except in support mode)
+                  if (modeRef.current !== 'support') {
+                    setShowLiveTranscript(false);
+                  } else {
+                    // In support mode, keep live transcript showing user's query
+                    setShowLiveTranscript(true);
+                  }
+                  // Hide buttons when new response arrives
+                  setShowCoachingButtons(false);
+                  // Trigger button animation for new responses
+                  setCoachingButtonsRefreshing(true);
+                  setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
+                  // Show buttons after 3 seconds
+                  setTimeout(() => setShowCoachingButtons(true), 3000);
                   // Set first actual response (not question header) as the main answer and auto-play it
                   const firstResponse = suggestions.find(s => !s.isQuestionHeader);
                   const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();                  
+                  // Add to conversation history for pipeline path
+                  addConversationEntry(t, firstAnswer, suggestions);
                   if (speechActive) {
                     // Use TTS with selected voice for better quality
                     try {
@@ -441,15 +566,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
                         };
                         audio.onended = () => { 
                           console.log("🔊 TTS audio ended, streaming:", streaming);
-                          // DON'T set isVoiceActive to false - keep mic always on
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
-                          // Mic stays active - no need to restart recognition
-                          console.log("🔊 TTS ended - mic remains active for next query");
+                          // Restart microphone after AI speech ends
+                          restartMicrophone();
                           setMicReactivated(true);
                           setTimeout(() => setMicReactivated(false), 2000);
-                          showToast("🎤 Mic is ready - speak your next query!");
                         };
                         audio.play().catch(e => {
                           console.error("TTS audio playback failed:", e);
@@ -531,7 +654,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
           
           // Get GPT response
           try {
-            const { responseText } = await runGpt({ transcript, mode });
+            const { responseText } = await runGpt({ transcript, mode, conversationHistory });
             setPredatorAnswer(responseText);
             
             // Trigger refresh animation for new response
@@ -604,12 +727,18 @@ Generate 1 empathetic support response that solves problems, shows understanding
     setIsAskGptProcessing(true);
     const speedTimer = startSpeedTimer();
     try {
-      const { responseText } = await runGpt({ transcript: askText, mode });
+      const { responseText } = await runGpt({ transcript: askText, mode, conversationHistory });
       setPredatorAnswer(responseText);
+      
+      // Ensure we show conversation history view (not live transcript) when response arrives
+      setShowLiveTranscript(false);
       
       // Trigger refresh animation for new response
       if (responseText) {
         triggerRefreshAnimation();
+        // Add to conversation history with a single suggestion for support/sales Ask flow
+        const suggestions = [{ id: 1, text: responseText, timestamp: Date.now() }];
+        addConversationEntry(askText, responseText, suggestions);
       }
       
       if (speechActive && responseText) {
@@ -627,11 +756,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
             setIsTtsPlaying(true);
           };
                         audio.onended = () => { 
-                          // DON'T set isVoiceActive to false - keep mic always on
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           isTtsPlayingRef.current = false;
-                          currentAudioRef.current = null; 
+                          currentAudioRef.current = null;
+                          // Restart microphone after AI speech ends
+                          restartMicrophone(); 
                         };
             audio.onpause = () => { /* keep state unless ended */ };
             audio.play().catch(e => {
@@ -685,17 +815,17 @@ Generate 1 empathetic support response that solves problems, shows understanding
     };
     utter.onend = () => { 
       console.log("🔊 Browser TTS ended, streaming:", streaming);
-      // DON'T set isVoiceActive to false - keep mic always on
       setIsTtsPlaying(false);
-      // Mic stays active - no need to restart recognition
-      console.log("🔊 Browser TTS ended - mic remains active for next query");
+      // Restart microphone after AI speech ends
+      restartMicrophone();
       setMicReactivated(true);
       setTimeout(() => setMicReactivated(false), 2000);
-      showToast("🎤 Mic is ready - speak your next query!");
     };
     utter.onerror = () => {
       console.log("🔊 Browser TTS error occurred");
-      // DON'T set isVoiceActive to false - keep mic always on
+      setIsTtsPlaying(false);
+      // Restart microphone after TTS error
+      restartMicrophone();
     };
     
     window.speechSynthesis.speak(utter);
@@ -716,7 +846,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
         console.log("🎤 Real-time speech recognition started - MIC IS NOW LISTENING");
         setStreaming(true);
         manuallyStoppedRef.current = false; // Reset manual stop flag when starting
-        setLiveTranscript("Listening...");
         setIsVoiceActive(true); // Mic is listening
         
         // Only stop audio if TTS is not actively playing - allow TTS to continue
@@ -735,18 +864,32 @@ Generate 1 empathetic support response that solves problems, shows understanding
       };
       
       recognition.onresult = (event) => {
-        // Always process speech input - mic stays active during TTS
+        // Don't process speech input if AI is currently speaking
+        if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
+          console.log("🔇 AI is speaking - ignoring user input to prevent feedback");
+          return;
+        }
+        
         console.log("🎤 Speech detected - processing input");
         
         let interimTranscript = '';
         let finalTranscript = '';
         
+        // Clear live STT immediately when new speech segment starts
+        if (event.resultIndex === 0) {
+          setLiveTranscript("");
+          // Switch to live transcript view when user starts speaking
+          setShowLiveTranscript(true);
+        }
+        
         // Clear predator answer as soon as user starts speaking and show processing
         if (event.resultIndex === 0 && predatorAnswer) {
           setPredatorAnswer("");
-          setCoachingSuggestions([]); // Clear previous suggestions when new speech starts
+          // Keep coaching suggestions visible - don't clear them
           setResponseSpeed(null);
           setIsProcessingFast(true);
+          // Clear current user input when new speech starts
+          setCurrentUserInput("");
         }
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -756,6 +899,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
           } else {
             interimTranscript += result[0].transcript;
           }
+        }
+        
+        // Update current user input for display
+        if (finalTranscript) {
+          setCurrentUserInput(finalTranscript.trim());
+        } else if (interimTranscript) {
+          setCurrentUserInput(interimTranscript);
         }
         
         // Update live transcript with both final and interim results
@@ -768,10 +918,15 @@ Generate 1 empathetic support response that solves problems, shows understanding
           
           // Use only new speech content, don't append to old transcript
           setTranscript(finalTranscript);
-          setLiveTranscript(finalTranscript + interimTranscript);
+          // In support mode, show only current query; in sales mode, show accumulated
+          if (modeRef.current === 'support') {
+            setLiveTranscript(finalTranscript + interimTranscript);
+          } else {
+            setLiveTranscript(finalTranscript + interimTranscript);
+          }
           
-          // Debounce silence: after ~3s of no more finals, call GPT and update answer
-          // Increased from 1s to 3s to allow for longer queries
+          // Debounce silence: after ~2s of no more finals, call GPT and update answer
+          // Reduced from 3s to 2s for better responsiveness while still handling pauses
           if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current);
           }
@@ -782,6 +937,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
               setIsProcessing(true);
               // Stop any playing audio before processing new response
               stopAllAudio();
+              
+              // In support mode, keep the user's query visible in live transcript during processing
+              if (modeRef.current === 'support') {
+                setLiveTranscript(captured);
+              }
               
               // Get responses from GPT based on current mode
               const currentMode = modeRef.current; // Use ref for immediate value
@@ -808,7 +968,7 @@ SUPPORT MODE INSTRUCTIONS:
 
 Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
               
-              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode });
+              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode, conversationHistory });
               
               if (responseText) {
                 // Parse response based on current mode
@@ -894,11 +1054,28 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
+                  // Switch to conversation history view when response arrives (except in support mode)
+                  if (modeRef.current !== 'support') {
+                    setShowLiveTranscript(false);
+                  } else {
+                    // In support mode, keep live transcript showing user's query
+                    setShowLiveTranscript(true);
+                  }
+                  // Hide buttons when new response arrives
+                  setShowCoachingButtons(false);
+                  // Trigger button animation for new responses
+                  setCoachingButtonsRefreshing(true);
+                  setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
+                  // Show buttons after 3 seconds
+                  setTimeout(() => setShowCoachingButtons(true), 3000);
                   // Set first actual response (not question header) as the main answer and auto-play it
                   const firstResponse = suggestions.find(s => !s.isQuestionHeader);
                   const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
                   setPredatorAnswer(firstAnswer);
                   triggerRefreshAnimation();
+                  
+                  // Add to conversation history with all A/B/C responses
+                  addConversationEntry(captured, firstAnswer, suggestions);
                   
                   if (speechActive) {
                     // Use TTS with selected voice for better quality
@@ -935,15 +1112,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
                         };
                         audio.onended = () => { 
                           console.log("🔊 TTS audio ended, streaming:", streaming);
-                          // DON'T set isVoiceActive to false - keep mic always on
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           currentAudioRef.current = null;
-                          // Mic stays active - no need to restart recognition
-                          console.log("🔊 TTS ended - mic remains active for next query");
+                          // Restart microphone after AI speech ends
+                          restartMicrophone();
                           setMicReactivated(true);
                           setTimeout(() => setMicReactivated(false), 2000);
-                          showToast("🎤 Mic is ready - speak your next query!");
                         };
                         audio.play().catch(e => {
                           console.error("TTS audio playback failed:", e);
@@ -966,7 +1141,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
               setIsProcessing(false);
               endSpeedTimer(speedTimer);
             }
-          }, 3000); // Increased from 1000ms to 3000ms to allow for longer queries
+          }, 2000); // Reduced from 3000ms to 2000ms for better responsiveness while handling pauses
         } else if (interimTranscript) {
           // Show interim results - use only interim content
           setLiveTranscript(interimTranscript);
@@ -974,6 +1149,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
           if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current);
           }
+          // Update current user input for display during interim results
+          setCurrentUserInput(interimTranscript);
           // Note: Audio stopping is now handled at the beginning of onresult
         }
       };
@@ -1045,9 +1222,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
     if (processingTimeoutRef.current) {
       clearTimeout(processingTimeoutRef.current);
     }
+    // Stop all processing when mic is stopped
+    setIsProcessing(false);
+    setIsProcessingFast(false);
+    setResponseSpeed(null);
     setStreaming(false);
     setLiveTranscript("");
-    setCoachingSuggestions([]);
+    // Keep coaching suggestions visible - don't clear them
     lastProcessedTextRef.current = "";
     setIsVoiceActive(false);
     showToast("🛑 Mic stopped - click Start to listen again");
@@ -1059,6 +1240,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
   const selectCoachingSuggestion = async (suggestion) => {
     setPredatorAnswer(suggestion.text);
     
+    // Only update Predator Answer box, don't add to conversation history
     // Speak the suggestion if speech is active
     if (speechActive) {
       // Use TTS with selected voice for better quality
@@ -1094,11 +1276,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
             isTtsPlayingRef.current = true;
           };
                         audio.onended = () => { 
-                          // DON'T set isVoiceActive to false - keep mic always on
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
                           isTtsPlayingRef.current = false;
-                          currentAudioRef.current = null; 
+                          currentAudioRef.current = null;
+                          // Restart microphone after AI speech ends
+                          restartMicrophone(); 
                         };
           audio.play().catch(e => {
             console.error("TTS audio playback failed:", e);
@@ -1167,31 +1350,29 @@ Generate 1 empathetic support response that solves problems, shows understanding
             Predator Live Transcript
           </h2>
 
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-1 mb-2">
             <button
-              className={`cursor-pointer border rounded-lg px-4 py-1.5 shadow w-full sm:w-auto ${
-                streaming ? (isProcessing ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : (isTtsPlaying || isTtsPlayingRef.current) ? 'bg-blue-100 border-blue-400 text-blue-700' : micReactivated ? 'bg-green-200 border-green-500 text-green-800 animate-pulse' : 'bg-green-100 border-green-400 text-green-700') : 'hover:bg-[#f5f5f5]'
-              }`}
+              className="cursor-pointer border rounded-lg px-2 py-1 shadow w-full sm:w-auto hover:bg-gray-100"
               onClick={startRealTimeRecognition}
               disabled={streaming}
             >
               {streaming ? (isProcessing ? '🔄 Processing...' : (isTtsPlaying || isTtsPlayingRef.current) ? '🔊 AI Speaking' : micReactivated ? '🎤 Ready!' : '🎤 Auto-Listening') : 'Start Live Mic'}
             </button>
             <button
-              className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg shadow w-full sm:w-auto"
+              className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-2 py-1 rounded-lg shadow w-full sm:w-auto"
               onClick={stopRealTimeRecognition}
             >
               Stop Mic
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
             <label className="flex flex-col text-sm font-medium">
               Language
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
+                className="mt-1 border rounded-lg px-2 py-1 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
               >
                 <option>English</option>
                 <option>German</option>
@@ -1203,34 +1384,28 @@ Generate 1 empathetic support response that solves problems, shows understanding
               <select
                 value={mode}
                 onChange={(e) => handleModeChange(e.target.value)}
-                className={`mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer ${
-                  mode === 'sales' ? 'bg-green-50 border-green-300' : 'bg-blue-50 border-blue-300'
-                }`}
+                className="mt-1 border rounded-lg px-2 py-1 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer"
               >
                 <option value="sales">Sales</option>
                 <option value="support">Support</option>
               </select>
-              <span className={`text-xs mt-1 font-semibold ${
-                mode === 'sales' ? 'text-green-600' : 'text-blue-600'
-              }`}>
-                {mode === 'sales' ? '🎯 Sales Mode: 3 Responses, Professional & Confident' : '🛠️ Support Mode: 1 Response, Empathetic & Problem-Solving'}
-              </span>
+              {/* Removed descriptive helper text under mode */}
             </label>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mb-2">
             <label className="flex flex-col text-sm font-medium w-full sm:w-1/2">
               AI Voice Selection
               <select
                 value={aiVoiceSelection}
                 onChange={(e) => { setAiVoiceSelection(e.target.value); setVoice(e.target.value); }}
-                className="mt-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer bg-yellow-50"
+                className="mt-1 border rounded-lg px-2 py-1 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none w-full cursor-pointer bg-yellow-50"
               >
                 {voices.map(v => (
                   <option key={v.id} value={v.id}>{v.label}</option>
                 ))}
               </select>
-              <span className="text-xs text-gray-600 mt-1">Selected: {voices.find(v => v.id === aiVoiceSelection)?.label || aiVoiceSelection}</span>
+              {/* Removed selected voice helper text */}
             </label>
 
             <label className="flex items-center text-sm sm:text-base w-full sm:w-1/2 sm:justify-end cursor-pointer">
@@ -1238,27 +1413,73 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 type="checkbox"
                 checked={speechActive}
                 onChange={() => setSpeechActive(!speechActive)}
-                className="mr-2 cursor-pointer"
+                className="mr-1 cursor-pointer"
               />
               Speech Output Active
             </label>
           </div>
 
-          <button
-            className="cursor-pointer border rounded-lg px-4 py-1.5 mb-3 shadow hover:bg-[#f5f5f5] w-full flex items-center justify-center gap-2"
-            onClick={handleRecording}
-          >
-            {recording && <span className="animate-pulse">🎤</span>} Recording Own Voice
-          </button>
 
-          <textarea
-            value={liveTranscript}
-            onChange={(e) => setLiveTranscript(e.target.value)}
-            className={`w-full flex-1 border-2 rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto ${
-              streaming ? (isProcessing ? 'border-yellow-400 bg-yellow-50' : (isTtsPlaying || isTtsPlayingRef.current) ? 'border-blue-400 bg-blue-50' : 'border-green-400 bg-green-50') : 'border-[#D72638]'
-            }`}
-            placeholder={streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
-          />
+          {/* Live Transcript or Conversation History Display */}
+          <div ref={conversationBoxRef} className="w-full h-[60vh] border-2 border-[#D72638] rounded-2xl p-3 shadow-sm overflow-y-auto mb-3">
+            {showLiveTranscript ? (
+              /* Live Transcript View */
+              <textarea
+                value={liveTranscript}
+                onChange={(e) => setLiveTranscript(e.target.value)}
+                className="w-full h-full border-none resize-none focus:ring-0 outline-none bg-transparent text-black"
+                placeholder={streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
+              />
+            ) : (
+              /* Conversation History View from localStorage */
+              <>
+                    {conversationHistory.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="text-xs text-gray-500 mb-2 font-semibold">
+                      {mode === 'sales' ? '📈 Sales Mode History' : '🛠️ Support Mode History'}
+                    </div>
+                    {conversationHistory.map((entry) => (
+                      <div key={entry.id} className="space-y-3">
+                        {/* Customer Query */}
+                        <div className="p-3 mb-3 bg-gray-50 rounded-lg">
+                          <div className="text-sm font-semibold mb-1">Customer:</div>
+                          <div className="text-sm">{entry.userInput}</div>
+                          <div className="text-xs text-gray-500 mt-2">{entry.timestamp}</div>
+                        </div>
+                        
+                        {/* Response A, B, C - only show if they exist and are not empty */}
+                        {entry.responseA && entry.responseA.trim() && (
+                          <div className="p-3 mb-2 bg-blue-50 rounded-lg">
+                            <div className="text-sm font-semibold mb-1">Response A:</div>
+                            <div className="text-sm">{entry.responseA}</div>
+                          </div>
+                        )}
+                        {entry.responseB && entry.responseB.trim() && (
+                          <div className="p-3 mb-2 bg-green-50 rounded-lg">
+                            <div className="text-sm font-semibold mb-1">Response B:</div>
+                            <div className="text-sm">{entry.responseB}</div>
+                          </div>
+                        )}
+                        {entry.responseC && entry.responseC.trim() && (
+                          <div className="p-3 mb-2 bg-purple-50 rounded-lg">
+                            <div className="text-sm font-semibold mb-1">Response C:</div>
+                            <div className="text-sm">{entry.responseC}</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Placeholder when no conversation */}
+                {conversationHistory.length === 0 && (
+                  <div className="text-gray-500 text-sm text-center py-8">
+                    {streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime!") : `Click 'Start Live Mic' to begin ${mode === 'sales' ? 'sales' : 'support'} conversations...`}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Whisper */}
@@ -1296,35 +1517,54 @@ Generate 1 empathetic support response that solves problems, shows understanding
           />
         </div>
 
-        {/* Predator Answer */}
+        {/* Predator Answer - Conversation History */}
         <div className="rounded-2xl p-4 bg-[#f5f5f5] shadow-lg flex flex-col">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-bold text-lg" style={orbitronStyle}>
               Predator Answer
             </h2>
-            {isProcessingFast && (
-              <div className="flex items-center gap-2 text-sm text-green-600 font-semibold">
-                <span className="animate-spin">⚡</span>
-                Processing...
+            <div className="flex items-center gap-2">
+              {isProcessingFast && (
+                <div className="flex items-center gap-2 text-sm text-green-600 font-semibold">
+                  <span className="animate-spin">⚡</span>
+                  Processing...
+                </div>
+              )}
+              {responseSpeed && (
+                <div className={`text-xs font-semibold px-2 py-1 rounded ${
+                  responseSpeed < 3000 ? 'bg-green-100 text-green-700' : 
+                  responseSpeed < 5000 ? 'bg-yellow-100 text-yellow-700' : 
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {responseSpeed}ms
+                </div>
+              )}
+              {conversationHistory.length > 0 && (
+                <button
+                  onClick={clearConversationHistory}
+                  className="cursor-pointer bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
+                >
+                  Clear History
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Current Response Display */}
+          <div className={`w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm overflow-y-auto mb-3 max-h-[70vh] ${
+            predatorAnswerRefreshing ? 'animate-pulse bg-yellow-50 border-yellow-400 shadow-lg' : ''
+          }`}>
+            {predatorAnswer ? (
+              <div className="p-3">
+                <div className="text-sm font-semibold mb-2">Current Response:</div>
+                <div className="text-sm text-black">{predatorAnswer.replace(/^[ABC]:\s*/, '')}</div>
               </div>
-            )}
-            {responseSpeed && (
-              <div className={`text-xs font-semibold px-2 py-1 rounded ${
-                responseSpeed < 3000 ? 'bg-green-100 text-green-700' : 
-                responseSpeed < 5000 ? 'bg-yellow-100 text-yellow-700' : 
-                'bg-red-100 text-red-700'
-              }`}>
-                {responseSpeed}ms
+            ) : (
+              <div className="text-gray-500 text-sm text-center py-8">
+                {streaming ? (isProcessing ? "" : (isTtsPlaying || isTtsPlayingRef.current) ? "" : "") : ""}
               </div>
             )}
           </div>
-          <textarea
-            value={predatorAnswer}
-            onChange={(e) => setPredatorAnswer(e.target.value)}
-            className={`w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 mb-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto transition-all duration-500 ${
-              predatorAnswerRefreshing ? 'animate-pulse bg-yellow-50 border-yellow-400 shadow-lg' : ''
-            }`}
-          />
           {/* <div className="flex flex-col sm:flex-row gap-2 mb-3">
             {["Good Answer A", "Good Answer B", "Good Answer C"].map((btn) => (
               <button
@@ -1336,14 +1576,14 @@ Generate 1 empathetic support response that solves problems, shows understanding
               </button>
             ))}
           </div> */}
-          <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            {coachingSuggestions.map((suggestion, index) => {
+          <div className={`flex flex-col sm:flex-row gap-2 mb-0 sticky bottom-0 bg-[#f5f5f5] pt-2 z-10 transition-opacity duration-500 ${showCoachingButtons ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {coachingSuggestions.length > 0 ? coachingSuggestions.map((suggestion, index) => {
               // Check if this is a combined response from multiple questions
               if (suggestion.isCombinedResponse) {
                 return (
-                  <button
+                <button
                     key={suggestion.id}
-                    className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
+                  className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
                       coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
                     }`}
                     onClick={() => selectCoachingSuggestion(suggestion)}
@@ -1382,7 +1622,38 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   {responseLabel}
                 </button>
               );
-            })}
+            }) : (
+              // Default buttons when no suggestions available
+              <>
+                <button
+                  className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center"
+                  onClick={() => {
+                    setPredatorAnswer("Response A: This is a sample response for option A. Please speak to get AI-generated responses.");
+                    showToast("Selected Response A");
+                  }}
+                >
+                  Good Answer A
+                </button>
+                <button
+                  className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center"
+                  onClick={() => {
+                    setPredatorAnswer("Response B: This is a sample response for option B. Please speak to get AI-generated responses.");
+                    showToast("Selected Response B");
+                  }}
+                >
+                  Good Answer B
+                </button>
+                <button
+                  className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center"
+                  onClick={() => {
+                    setPredatorAnswer("Response C: This is a sample response for option C. Please speak to get AI-generated responses.");
+                    showToast("Selected Response C");
+                  }}
+                >
+                  Good Answer C
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

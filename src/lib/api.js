@@ -50,7 +50,7 @@ export async function fetchVoiceConfig() {
   return res.json();
 }
 
-export async function runVoicePipeline({ audioBlob, mode, voice, language, encoding, hints, boost, sttModel }) {
+export async function runVoicePipeline({ audioBlob, mode, voice, language, encoding, hints, boost, sttModel, conversationHistory = [] }) {
   console.log("🌐 API: Starting voice pipeline call...");
   const form = new FormData();
   if (audioBlob) form.append("audio", audioBlob, "audio.webm");
@@ -64,6 +64,9 @@ export async function runVoicePipeline({ audioBlob, mode, voice, language, encod
   }
   if (typeof boost !== 'undefined') form.append("boost", String(boost));
   if (typeof sttModel !== 'undefined') form.append("sttModel", sttModel);
+  if (conversationHistory && conversationHistory.length > 0) {
+    form.append("conversationHistory", JSON.stringify(conversationHistory));
+  }
   
   console.log("🌐 API: Sending request to /api/voice/pipeline with:", {
     audioSize: audioBlob?.size,
@@ -91,8 +94,8 @@ export async function runStt({ audioBlob, language, encoding, hints, boost, sttM
   return postForm(`/api/voice/stt`, form);
 }
 
-export async function runGpt({ transcript, mode }) {
-  return postJson(`/api/voice/gpt`, { transcript, mode });
+export async function runGpt({ transcript, mode, conversationHistory = [] }) {
+  return postJson(`/api/voice/gpt`, { transcript, mode, conversationHistory });
 }
 
 export async function runTts({ text, voice }) {
