@@ -207,7 +207,7 @@ export default function SignUp() {
           const token = await getIdToken(result.user, true);
           const apiBase = import.meta.env.VITE_API_BASE_URL || 
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-            ? "http://localhost:8000" 
+            ? "http://localhost:7000" 
             : "";
           let who = { role: "user" };
           try {
@@ -263,7 +263,7 @@ export default function SignUp() {
     try {
       console.log("🚀 Starting verification process...");
       console.log("📧 Email:", formData.email);
-      console.log("🌐 API Base URL:", import.meta.env.VITE_API_BASE_URL || "http://localhost:8000");
+      console.log("🌐 API Base URL:", import.meta.env.VITE_API_BASE_URL || "http://localhost:7000");
       
       // Add timeout to prevent hanging (increased for email sending)
       const timeoutPromise = new Promise((_, reject) => 
@@ -349,7 +349,7 @@ export default function SignUp() {
       const [cred, adminRolePromise] = await Promise.allSettled([
         createUserWithEmailAndPassword(getAuthInstance(), formData.email, formData.password),
         formData.email === "admin@gmail.com" ? 
-          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:7000"}/api/auth/assign-role`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ uid: "temp", role: "admin" }),
@@ -363,7 +363,7 @@ export default function SignUp() {
       // Update admin role if needed (after getting actual UID)
       if (formData.email === "admin@gmail.com") {
         try {
-          await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+          await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:7000"}/api/auth/assign-role`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ uid: userCred.user.uid, role: "admin" }),
@@ -412,7 +412,7 @@ export default function SignUp() {
 
       // Get fresh token and determine role
       const token = await getIdToken(userCred.user, true);
-      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
       let who = { role: "user" };
       try {
         const res = await fetch(`${apiBase}/api/auth/whoami`, {
@@ -495,7 +495,7 @@ export default function SignUp() {
         const [token, adminRolePromise] = await Promise.allSettled([
           getIdToken(cred.user, true),
           cred.user?.email === "admin@gmail.com" ? 
-            fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/assign-role`, {
+            fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:7000"}/api/auth/assign-role`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ uid: cred.user.uid, role: "admin" }),
@@ -512,7 +512,7 @@ export default function SignUp() {
         // Get user role
         const apiBase = import.meta.env.VITE_API_BASE_URL || 
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-            ? "http://localhost:8000" 
+            ? "http://localhost:7000" 
             : "";
         let who = { role: "user" };
         try {

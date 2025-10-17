@@ -22,6 +22,8 @@ export default function ProfileCover() {
   const [showPhoneEdit, setShowPhoneEdit] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("PK");
+  const [showCompanyEdit, setShowCompanyEdit] = useState(false);
+  const [companyName, setCompanyName] = useState("");
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -150,15 +152,19 @@ const formatPhoneNumber = (phone, country) => {
 
   const handlePhoneUpdate = async (e) => {
     e.preventDefault();
+    
+    console.log("📱 Phone update attempt:", phoneNumber);
 
     if (!phoneNumber.trim()) {
       setError("Phone number cannot be empty.");
       return;
     }
 
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    if (!phoneRegex.test(phoneNumber.replace(/\s/g, ''))) {
-      setError("Please enter a valid phone number.");
+    // More flexible phone number validation
+    const cleanPhone = phoneNumber.replace(/\s/g, '');
+    const phoneRegex = /^[\+]?[0-9][\d]{4,15}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      setError("Please enter a valid phone number (at least 5 digits).");
       return;
     }
 
@@ -169,8 +175,11 @@ const formatPhoneNumber = (phone, country) => {
       // Try server API first
       try {
         const idToken = await user.getIdToken();
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        const response =await fetch(`${API_BASE}/api/auth/update-profile`, {
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
+        console.log("🌐 API Base URL:", API_BASE);
+        console.log("🔑 Token available:", !!idToken);
+        
+        const response = await fetch(`${API_BASE}/api/auth/update-profile`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -181,8 +190,12 @@ const formatPhoneNumber = (phone, country) => {
           })
         });
 
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log("✅ Server response:", data);
           // Update local state
           setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
           setShowPhoneEdit(false);
@@ -190,6 +203,10 @@ const formatPhoneNumber = (phone, country) => {
           showToast("Phone number updated successfully!");
           setTimeout(() => setSuccess(""), 3000);
           return;
+        } else {
+          const errorData = await response.json();
+          console.error("❌ Server error:", errorData);
+          throw new Error(errorData.error || "Server request failed");
         }
       } catch (serverError) {
         console.log('Server API not available, falling back to Firestore:', serverError);
@@ -227,6 +244,101 @@ const formatPhoneNumber = (phone, country) => {
 
       if (error.code === 'permission-denied' || error.message.includes('permission')) {
         errorMessage = "Permission denied. Please contact support to update your phone number.";
+      } else if (error.code === 'network-request-failed') {
+        errorMessage = "Network error. Please check your connection and try again.";
+      }
+
+      setError(errorMessage);
+      showToast(errorMessage);
+    }
+  };
+
+  const handleCompanyUpdate = async (e) => {
+    e.preventDefault();
+    
+    console.log("🏢 Company update attempt:", companyName);
+
+    if (!companyName.trim()) {
+      setError("Company name cannot be empty.");
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccess("");
+
+      // Try server API first
+      try {
+        const idToken = await user.getIdToken();
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
+        console.log("🌐 API Base URL:", API_BASE);
+        console.log("🔑 Token available:", !!idToken);
+        
+        const response = await fetch(`${API_BASE}/api/auth/update-profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            companyName: companyName.trim()
+          })
+        });
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("✅ Server response:", data);
+          // Update local state
+          setUserData(prev => ({ ...prev, companyName: companyName.trim() }));
+          setShowCompanyEdit(false);
+          setSuccess("Company name updated successfully!");
+          showToast("Company name updated successfully!");
+          setTimeout(() => setSuccess(""), 3000);
+          return;
+        } else {
+          const errorData = await response.json();
+          console.error("❌ Server error:", errorData);
+          throw new Error(errorData.error || "Server request failed");
+        }
+      } catch (serverError) {
+        console.log('Server API not available, falling back to Firestore:', serverError);
+      }
+
+      // Fallback to direct Firestore update
+      console.log('Saving company name to Firestore:', companyName.trim());
+      await setDoc(doc(db, 'users', user.uid), {
+        companyName: companyName.trim(),
+        updatedAt: new Date()
+      }, { merge: true });
+
+      // Verify the save by reading back from Firestore
+      const updatedDoc = await getDoc(doc(db, 'users', user.uid));
+      if (updatedDoc.exists()) {
+        const savedData = updatedDoc.data();
+        console.log('Verified saved data:', savedData);
+        setUserData(savedData);
+        setCompanyName(savedData.companyName || companyName.trim());
+      } else {
+        // Update local state as fallback
+        setUserData(prev => ({ ...prev, companyName: companyName.trim() }));
+      }
+
+      setShowCompanyEdit(false);
+      setSuccess("Company name updated successfully!");
+      showToast("Company name updated successfully!");
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (error) {
+      console.error('Error updating company name:', error);
+
+      let errorMessage = "Failed to update company name. Please try again.";
+
+      if (error.code === 'permission-denied' || error.message.includes('permission')) {
+        errorMessage = "Permission denied. Please contact support to update your company name.";
       } else if (error.code === 'network-request-failed') {
         errorMessage = "Network error. Please check your connection and try again.";
       }
@@ -311,6 +423,11 @@ const formatPhoneNumber = (phone, country) => {
             // ✅ Firestore ka phoneNumber state me set karo
             if (data.phoneNumber) {
               setPhoneNumber(data.phoneNumber);
+            }
+            
+            // ✅ Firestore ka companyName state me set karo
+            if (data.companyName) {
+              setCompanyName(data.companyName);
             }
           } else {
             // Agar Firestore me user document nahi hai to create kar do
@@ -472,6 +589,57 @@ const formatPhoneNumber = (phone, country) => {
               ) : (
                 <p className="text-sm sm:text-lg font-semibold text-gray-900">
                   {userData?.phoneNumber || "Add phone number"}
+                </p>
+              )}
+            </div>
+
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-purple-600 p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Company</h3>
+                </div>
+                <button
+                  onClick={() => setShowCompanyEdit(!showCompanyEdit)}
+                  className="text-purple-600 hover:text-purple-700 text-sm font-medium cursor-pointer"
+                >
+                  {showCompanyEdit ? "Cancel" : "Edit"}
+                </button>
+              </div>
+              <p className="text-gray-500 text-xs sm:text-sm mb-1">Organization</p>
+
+              {showCompanyEdit ? (
+                <form onSubmit={handleCompanyUpdate} className="space-y-3">
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 text-sm"
+                    placeholder="Enter company name"
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      type="submit"
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm cursor-pointer"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCompanyEdit(false)}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors text-sm cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-sm sm:text-lg font-semibold text-gray-900">
+                  {userData?.companyName || "Add company name"}
                 </p>
               )}
             </div>

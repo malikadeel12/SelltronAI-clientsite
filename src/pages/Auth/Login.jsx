@@ -57,7 +57,7 @@ export default function Login() {
           const token = await getIdToken(result.user, true);
           const apiBase = import.meta.env.VITE_API_BASE_URL || 
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-            ? "http://localhost:8000" 
+            ? "http://localhost:7000" 
             : "";
           let who = { role: "user" };
           try {
@@ -125,7 +125,7 @@ export default function Login() {
       // Optimized: Get token and role in parallel
       const [token, roleResponse] = await Promise.allSettled([
         getIdToken(cred.user, true),
-        fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/whoami`, {
+        fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:7000"}/api/auth/whoami`, {
           headers: { Authorization: `Bearer ${await getIdToken(cred.user, true)}` },
         })
       ]);
@@ -246,7 +246,7 @@ export default function Login() {
         // Optimized: Parallel operations for faster setup
         const [token, roleResponse] = await Promise.allSettled([
           getIdToken(cred.user, true),
-          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/whoami`, {
+          fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:7000"}/api/auth/whoami`, {
             headers: { Authorization: `Bearer ${await getIdToken(cred.user, true)}` },
           })
         ]);
