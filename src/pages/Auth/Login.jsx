@@ -135,6 +135,35 @@ export default function Login() {
         who = await roleResponse.value.json();
       }
 
+      // Sync user to HubSpot on login (non-blocking)
+      try {
+        console.log("🔄 Syncing user login to HubSpot...");
+        const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
+        const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token.value || token}`
+          }
+        });
+        
+        if (hubspotResponse.ok) {
+          const hubspotData = await hubspotResponse.json();
+          console.log("✅ User login synced to HubSpot successfully:", hubspotData.hubspotContactId);
+        } else if (hubspotResponse.status === 404) {
+          console.log("ℹ️ HubSpot sync endpoint not available on this server version, skipping sync");
+        } else {
+          console.warn("⚠️ HubSpot sync failed on login, but continuing");
+        }
+      } catch (hubspotError) {
+        if (hubspotError.message.includes('404') || hubspotError.message.includes('Not Found')) {
+          console.log("ℹ️ HubSpot sync endpoint not available on this server version, skipping sync");
+        } else {
+          console.warn("⚠️ HubSpot sync error on login (non-blocking):", hubspotError.message);
+        }
+        // Don't fail login if HubSpot sync fails
+      }
+
       setError("");
       showToast("Login successful! Redirecting to dashboard...");
       
@@ -261,6 +290,35 @@ export default function Login() {
         let who = { role: "user" };
         if (roleResponse.status === 'fulfilled' && roleResponse.value.ok) {
           who = await roleResponse.value.json();
+        }
+
+        // Sync Google user to HubSpot on login (non-blocking)
+        try {
+          console.log("🔄 Syncing Google user login to HubSpot...");
+          const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
+          const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token.value || token}`
+            }
+          });
+          
+          if (hubspotResponse.ok) {
+            const hubspotData = await hubspotResponse.json();
+            console.log("✅ Google user login synced to HubSpot successfully:", hubspotData.hubspotContactId);
+          } else if (hubspotResponse.status === 404) {
+            console.log("ℹ️ HubSpot sync endpoint not available on this server version, skipping sync");
+          } else {
+            console.warn("⚠️ HubSpot sync failed for Google login, but continuing");
+          }
+        } catch (hubspotError) {
+          if (hubspotError.message.includes('404') || hubspotError.message.includes('Not Found')) {
+            console.log("ℹ️ HubSpot sync endpoint not available on this server version, skipping sync");
+          } else {
+            console.warn("⚠️ HubSpot sync error for Google login (non-blocking):", hubspotError.message);
+          }
+          // Don't fail Google login if HubSpot sync fails
         }
         
         showToast("Redirecting to dashboard...");

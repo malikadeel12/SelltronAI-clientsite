@@ -203,4 +203,100 @@ export async function setEmailVerified(uid) {
   return res.json();
 }
 
+// --- CRM API Functions ---
+
+export async function getCustomerData(email) {
+  const fullUrl = `${API_BASE}/api/voice/crm/customer/${encodeURIComponent(email)}`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function updateCustomerData(customerData) {
+  const fullUrl = `${API_BASE}/api/voice/crm/customer`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(customerData),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function extractCustomerInfo(transcript, conversationHistory = []) {
+  const fullUrl = `${API_BASE}/api/voice/crm/extract-customer-info`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript, conversationHistory }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function searchCustomerByNameOrCompany(name, company) {
+  const fullUrl = `${API_BASE}/api/voice/crm/search-customer`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, company }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function searchCustomerByQuery(query, conversationHistory = []) {
+  const fullUrl = `${API_BASE}/api/voice/crm/search-customer-by-query`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, conversationHistory }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
 

@@ -9,7 +9,8 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline } from "../../lib/api";
+import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, searchCustomerByQuery } from "../../lib/api";
+import CRMSidebar from "../../components/CRMSidebar";
 
 // Font styles
 const orbitronStyle = {
@@ -40,6 +41,7 @@ export default function PredatorDashboard() {
   const modeRef = useRef("sales");
   const [voices, setVoices] = useState([{ id: "voice_1", label: "Voice 1" }]);
   const [streaming, setStreaming] = useState(false);
+  const streamingRef = useRef(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [coachingSuggestions, setCoachingSuggestions] = useState([]);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -58,6 +60,12 @@ export default function PredatorDashboard() {
   // New state for conversation history
   const [conversationHistory, setConversationHistory] = useState([]);
   const [currentUserInput, setCurrentUserInput] = useState("");
+  // CRM Panel state
+  const [crmSidebarVisible, setCrmSidebarVisible] = useState(false);
+  const [customerData, setCustomerData] = useState(null);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [userSelectingResponse, setUserSelectingResponse] = useState(false);
+  const [lastProcessedTranscript, setLastProcessedTranscript] = useState("");
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
@@ -152,8 +160,11 @@ export default function PredatorDashboard() {
   const stopAllInput = () => {
     // Stop real-time recognition if running
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
-      recognitionRef.current = null;
+      try { 
+        recognitionRef.current.stop(); 
+        console.log("🔇 Stopped real-time recognition to prevent AI voice transcription");
+      } catch (_) {}
+      recognitionRef.current = null; // Set to null immediately to prevent processing
     }
     // Stop MediaRecorder recording if active
     const rec = mediaRecorderRef.current;
@@ -168,6 +179,167 @@ export default function PredatorDashboard() {
   const showToast = (msg) => {
     setToast({ show: true, message: msg });
     setTimeout(() => setToast({ show: false, message: "" }), 2000);
+  };
+
+  // CRM Functions
+  const processCustomerInfo = async (transcript) => {
+    if (!transcript || transcript.trim() === lastProcessedTranscript) {
+      return; // Skip if same transcript or empty
+    }
+    
+    console.log("🔍 CRM: Processing customer info for transcript:", transcript);
+    setLastProcessedTranscript(transcript);
+    setCrmLoading(true);
+    
+    try {
+      // First, try to extract specific customer information from the conversation
+      const { extractedData } = await extractCustomerInfo(transcript, conversationHistory);
+      console.log("🔍 CRM: Extracted data:", extractedData);
+      
+      let customerFound = false;
+      
+      // Method 1: Try traditional extraction (email, name, phone, company)
+      if (extractedData && (extractedData.email || extractedData.name || extractedData.phone || extractedData.company)) {
+        console.log("✅ CRM: Customer information found via extraction");
+        
+        // Only show HubSpot data, not extracted data
+        if (extractedData.email) {
+          // Try to get existing customer data from HubSpot by email
+          try {
+            console.log("🔍 CRM: Searching HubSpot by email:", extractedData.email);
+            const { customerData: existingData } = await getCustomerData(extractedData.email);
+            if (existingData) {
+              console.log("✅ CRM: Customer found in HubSpot, opening sidebar");
+              setCrmSidebarVisible(true);
+              customerFound = true;
+              
+              // Merge HubSpot data with extracted data - prioritize extracted data (new info from conversation)
+              const mergedData = {
+                ...existingData,
+                ...extractedData,
+                // Prioritize extracted data (new info) over existing HubSpot data
+                name: extractedData.name || existingData.name,
+                email: extractedData.email || existingData.email,
+                phone: extractedData.phone || existingData.phone,
+                company: extractedData.company || existingData.company
+              };
+              setCustomerData(mergedData);
+              showToast("Customer data enhanced from HubSpot CRM");
+              console.log("✅ CRM: Customer data enhanced with HubSpot data:", mergedData);
+              
+              // Update customer data in HubSpot with new information if any fields were updated
+              if (extractedData.name || extractedData.phone || extractedData.company) {
+                try {
+                  console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
+                  await updateCustomerData(mergedData);
+                  showToast("Customer data updated in HubSpot CRM");
+                  console.log("✅ CRM: Customer data updated in HubSpot successfully");
+                } catch (updateError) {
+                  console.error("Error updating customer in HubSpot:", updateError);
+                  console.log("ℹ️ CRM: HubSpot update failed, but data is still displayed correctly");
+                }
+              }
+            } else {
+              console.log("ℹ️ CRM: Customer not found in HubSpot via email - not showing sidebar");
+              // Don't show sidebar or extracted data if customer not found in HubSpot
+            }
+          } catch (error) {
+            console.error("Error fetching customer from HubSpot:", error);
+            console.log("ℹ️ CRM: HubSpot search failed - not showing sidebar");
+            // Don't show sidebar if HubSpot search fails
+          }
+        } else if (extractedData.name || extractedData.company) {
+          // Try to search HubSpot by name and company when email is not available
+          try {
+            console.log("🔍 CRM: Searching HubSpot by name/company...");
+            const searchResult = await searchCustomerByNameOrCompany(extractedData.name, extractedData.company);
+            if (searchResult && searchResult.customers && searchResult.customers.length > 0) {
+              console.log("✅ CRM: Customer found in HubSpot via name/company, opening sidebar");
+              setCrmSidebarVisible(true);
+              customerFound = true;
+              
+              const existingCustomer = searchResult.customers[0];
+              // Merge HubSpot data with extracted data - prioritize extracted data (new info from conversation)
+              const mergedData = {
+                ...existingCustomer,
+                ...extractedData,
+                // Prioritize extracted data (new info) over existing HubSpot data
+                name: extractedData.name || existingCustomer.name,
+                email: extractedData.email || existingCustomer.email,
+                phone: extractedData.phone || existingCustomer.phone,
+                company: extractedData.company || existingCustomer.company
+              };
+              setCustomerData(mergedData);
+              showToast("Customer data enhanced from HubSpot CRM");
+              console.log("✅ CRM: Customer data enhanced with HubSpot data:", mergedData);
+              
+              // Update customer data in HubSpot with new information if any fields were updated
+              if (extractedData.name || extractedData.phone || extractedData.company) {
+                try {
+                  console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
+                  await updateCustomerData(mergedData);
+                  showToast("Customer data updated in HubSpot CRM");
+                  console.log("✅ CRM: Customer data updated in HubSpot successfully");
+                } catch (updateError) {
+                  console.error("Error updating customer in HubSpot:", updateError);
+                  console.log("ℹ️ CRM: HubSpot update failed, but data is still displayed correctly");
+                }
+              }
+            } else {
+              console.log("ℹ️ CRM: Customer not found in HubSpot via name/company - not showing sidebar");
+              // Don't show sidebar or extracted data if customer not found in HubSpot
+            }
+          } catch (error) {
+            console.error("Error searching customer in HubSpot:", error);
+            console.log("ℹ️ CRM: HubSpot search failed - not showing sidebar");
+            // Don't show sidebar if HubSpot search fails
+          }
+        }
+      }
+      
+      // Method 2: If no specific customer info found, try searching HubSpot with the entire query
+      if (!customerFound) {
+        console.log("🔍 CRM: No specific customer info found, trying query-based search...");
+        try {
+          // Extract just the user's question from the transcript
+          const userQuestion = transcript.match(/Customer said:\s*"([^"]+)"/i);
+          const query = userQuestion ? userQuestion[1] : transcript;
+          
+          console.log("🔍 CRM: Searching HubSpot with query:", query);
+          const searchResult = await searchCustomerByQuery(query, conversationHistory);
+          
+          if (searchResult && searchResult.foundCustomer) {
+            console.log("✅ CRM: Customer found via query search, opening sidebar");
+            console.log("🔍 CRM: Found customer data:", searchResult.foundCustomer);
+            setCrmSidebarVisible(true);
+            setCustomerData(searchResult.foundCustomer);
+            showToast(`Customer found via ${searchResult.searchMethod}: ${searchResult.message}`);
+            customerFound = true;
+          } else {
+            console.log("ℹ️ CRM: No customer found via query search");
+            console.log("🔍 CRM: Search result:", searchResult);
+          }
+        } catch (error) {
+          console.error("Error searching customer by query:", error);
+        }
+      }
+      
+      if (!customerFound) {
+        console.log("ℹ️ CRM: No customer information found in transcript");
+        setCustomerData(null);
+      }
+      
+    } catch (error) {
+      console.error("Error processing customer info:", error);
+      showToast("Failed to process customer information");
+      setCustomerData(null);
+    } finally {
+      setCrmLoading(false);
+    }
+  };
+
+  const toggleCrmSidebar = () => {
+    setCrmSidebarVisible(!crmSidebarVisible);
   };
 
   // Function to stop all audio playback and mute microphone during AI speech
@@ -188,6 +360,7 @@ export default function PredatorDashboard() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
+        recognitionRef.current = null; // Set to null immediately to prevent processing
         console.log("🔇 Microphone muted during AI speech");
       } catch (e) {
         console.log("🔇 Microphone already stopped");
@@ -200,11 +373,18 @@ export default function PredatorDashboard() {
   // Function to restart microphone after AI speech ends
   const restartMicrophone = () => {
     console.log("🎤 Restarting microphone after AI speech ended");
-    if (streaming && !isTtsPlaying && !isTtsPlayingRef.current) {
+    if (streamingRef.current && !isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
       setTimeout(() => {
-        startRealTimeRecognition();
-        showToast("🎤 Mic is ready - speak your next query!");
-      }, 500); // Small delay to ensure TTS has fully ended
+        // Double-check that no audio is playing before restarting
+        if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
+          startRealTimeRecognition();
+          showToast("🎤 Mic is ready - speak your next query!");
+        } else {
+          console.log("🔇 Audio still playing - not restarting microphone");
+        }
+      }, 1000); // Increased delay to ensure TTS has fully ended
+    } else {
+      console.log("🔇 Not restarting microphone - conditions not met:", { streaming, isTtsPlaying, isTtsPlayingRef: isTtsPlayingRef.current, currentAudio: !!currentAudioRef.current });
     }
   };
 
@@ -479,10 +659,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     const responseLines = responseText.split('\n').filter(line => line.trim());
                     suggestions = responseLines.map((line, index) => {
                       const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                      const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
                       return {
                         id: index + 1,
                         text: text,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        responseType: responseType
                       };
                     });
                     console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
@@ -492,7 +674,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     suggestions = lines.slice(0, 3).map((suggestion, index) => ({
                       id: index + 1,
                       text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                      timestamp: Date.now()
+                      timestamp: Date.now(),
+                      responseType: String.fromCharCode(65 + index) // A, B, C
                     }));
                     console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
                   }
@@ -525,67 +708,28 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   // Show buttons after 3 seconds
                   setTimeout(() => setShowCoachingButtons(true), 3000);
                   // Set first actual response (not question header) as the main answer and auto-play it
-                  const firstResponse = suggestions.find(s => !s.isQuestionHeader);
-                  const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
-                  setPredatorAnswer(firstAnswer);
+                  // For auto-play, only use Response A specifically, not B or C
+                  const firstResponse = suggestions.find(s => !s.isQuestionHeader && !s.isCombinedResponse && s.responseType === 'A');
+                  let firstAnswer = firstResponse ? firstResponse.text : suggestions.find(s => s.responseType === 'A')?.text || suggestions[0].text;
+                  
+                  // If we still have a combined response, take only the first part before any double newlines
+                  if (firstAnswer && firstAnswer.includes('\n\n')) {
+                    firstAnswer = firstAnswer.split('\n\n')[0];
+                  }
+                  
+                  // Only set Response A in Predator Answer box
+                  const responseA = suggestions.find(s => s.responseType === 'A');
+                  const predatorAnswerText = responseA ? responseA.text : "Response A not found";
+                  console.log("🎯 Response A found:", responseA);
+                  console.log("🎯 Predator Answer Text:", predatorAnswerText);
+                  setPredatorAnswer(predatorAnswerText);
                   triggerRefreshAnimation();                  
                   // Add to conversation history for pipeline path
                   addConversationEntry(t, firstAnswer, suggestions);
-                  if (speechActive) {
-                    // Use TTS with selected voice for better quality
-                    try {
-                      const ttsResult = await runTts({ text: firstAnswer, voice: aiVoiceSelection });
-                      if (ttsResult.audioUrl) {
-                        stopAllInput();
-                        stopAllAudio();
-                        const audio = new Audio(ttsResult.audioUrl);
-                        currentAudioRef.current = audio;
-                        
-                        // Set TTS playing state immediately
-                        console.log("🔊 Setting TTS playing state to true");
-                        setIsTtsPlaying(true);
-                        isTtsPlayingRef.current = true;
-                        
-                        // Add event listeners before playing
-                        audio.addEventListener('play', () => {
-                          console.log("🔊 TTS audio started playing (addEventListener)");
-                          setIsTtsPlaying(true);
-                          isTtsPlayingRef.current = true;
-                        });
-                        
-                        audio.addEventListener('ended', () => {
-                          console.log("🔊 TTS audio ended (addEventListener)");
-                          setIsTtsPlaying(false);
-                          isTtsPlayingRef.current = false;
-                        });
-                        
-                        audio.onplay = () => {
-                          console.log("🔊 TTS audio started playing (onplay)");
-                          setIsTtsPlaying(true);
-                          isTtsPlayingRef.current = true;
-                        };
-                        audio.onended = () => { 
-                          console.log("🔊 TTS audio ended, streaming:", streaming);
-                          console.log("🔊 TTS audio ended");
-                          setIsTtsPlaying(false);
-                          currentAudioRef.current = null;
-                          // Restart microphone after AI speech ends
-                          restartMicrophone();
-                          setMicReactivated(true);
-                          setTimeout(() => setMicReactivated(false), 2000);
-                        };
-                        audio.play().catch(e => {
-                          console.error("TTS audio playback failed:", e);
-                          speakText(responseText);
-                        });
-                      } else {
-                        speakText(responseText);
-                      }
-                    } catch (ttsError) {
-                      console.error("TTS failed:", ttsError);
-                      speakText(responseText);
-                    }
-                  }
+                  
+                  // Process customer information for CRM
+                  processCustomerInfo(t);
+                  // Auto-play logic removed from recording pipeline - handled in live recognition pipeline
                 }
               }
             }
@@ -662,10 +806,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
               triggerRefreshAnimation();
             }
             
-            // Play TTS response
-            if (speechActive && responseText) {
-              speakText(responseText);
-            }
+            // Don't auto-play here - let the main response handling logic handle it
+            // if (speechActive && responseText) {
+            //   const firstResponse = getFirstIndividualResponse(responseText);
+            //   speakText(firstResponse);
+            // }
             
             triggerConfetti();
             showToast("Ready");
@@ -741,41 +886,43 @@ Generate 1 empathetic support response that solves problems, shows understanding
         addConversationEntry(askText, responseText, suggestions);
       }
       
-      if (speechActive && responseText) {
-        // Try to get TTS audio for the response
-        try {
-          const ttsResult = await runTts({ text: responseText, voice: aiVoiceSelection });
-          if (ttsResult.audioUrl) {
-            // Ensure mic is off and no overlap with any existing audio
-            stopAllInput();
-            stopAllAudio();
-            const audio = new Audio(ttsResult.audioUrl);
-            currentAudioRef.current = audio;
-            audio.onplay = () => {
-            console.log("🔊 TTS audio started playing");
-            setIsTtsPlaying(true);
-          };
-                        audio.onended = () => { 
-                          console.log("🔊 TTS audio ended");
-                          setIsTtsPlaying(false);
-                          isTtsPlayingRef.current = false;
-                          currentAudioRef.current = null;
-                          // Restart microphone after AI speech ends
-                          restartMicrophone(); 
-                        };
-            audio.onpause = () => { /* keep state unless ended */ };
-            audio.play().catch(e => {
-              console.error("TTS audio playback failed:", e);
-              speakText(responseText);
-            });
-          } else {
-            speakText(responseText);
-          }
-        } catch (ttsError) {
-          console.error("TTS failed:", ttsError);
-          speakText(responseText);
-        }
-      }
+      // Don't auto-play here - let the main response handling logic handle it
+      // if (speechActive && responseText) {
+      //   // Try to get TTS audio for the response (only first individual response)
+      //   const firstResponse = getFirstIndividualResponse(responseText);
+      //   try {
+      //     const ttsResult = await runTts({ text: firstResponse, voice: aiVoiceSelection });
+      //     if (ttsResult.audioUrl) {
+      //       // Ensure mic is off and no overlap with any existing audio
+      //       stopAllInput();
+      //       stopAllAudio();
+      //       const audio = new Audio(ttsResult.audioUrl);
+      //       currentAudioRef.current = audio;
+      //       audio.onplay = () => {
+      //       console.log("🔊 TTS audio started playing");
+      //       setIsTtsPlaying(true);
+      //     };
+      //                   audio.onended = () => { 
+      //                     console.log("🔊 TTS audio ended");
+      //                     setIsTtsPlaying(false);
+      //                     isTtsPlayingRef.current = false;
+      //                     currentAudioRef.current = null;
+      //                     // Restart microphone after AI speech ends
+      //                     restartMicrophone(); 
+      //                   };
+      //       audio.onpause = () => { /* keep state unless ended */ };
+      //       audio.play().catch(e => {
+      //         console.error("TTS audio playback failed:", e);
+      //         speakText(firstResponse);
+      //       });
+      //     } else {
+      //       speakText(firstResponse);
+      //     }
+      //   } catch (ttsError) {
+      //     console.error("TTS failed:", ttsError);
+      //     speakText(firstResponse);
+      //   }
+      // }
       triggerConfetti();
       setAskText("");
       endSpeedTimer(speedTimer);
@@ -795,10 +942,44 @@ Generate 1 empathetic support response that solves problems, shows understanding
     showToast(`${name} executed`);
   };
 
+  // Helper function to extract first individual response from response text
+  const getFirstIndividualResponse = (responseText) => {
+    if (!responseText) return responseText;
+    
+    // If response contains multiple responses (A, B, C format)
+    if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+      // Find the first Response A: line
+      const lines = responseText.split('\n');
+      const firstResponseLine = lines.find(line => line.includes("Response A:"));
+      if (firstResponseLine) {
+        return firstResponseLine.replace(/^Response A:\s*/, '').trim();
+      }
+    }
+    
+    // If response contains multiple responses separated by newlines
+    if (responseText.includes('\n\n')) {
+      return responseText.split('\n\n')[0];
+    }
+    
+    // If response contains numbered or bulleted responses
+    const lines = responseText.split('\n');
+    if (lines.length > 1) {
+      // Take the first non-empty line that doesn't look like a header
+      const firstLine = lines.find(line => line.trim() && !line.match(/^\d+\.?\s*$/) && !line.match(/^-\s*$/));
+      if (firstLine) {
+        return firstLine.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim();
+      }
+    }
+    
+    // Return the full text if no pattern matches
+    return responseText;
+  };
+
   // Helper function to handle TTS consistently
   const speakText = (text) => {
     if (!speechActive || !text) return;
     
+    console.log("🔇 Starting TTS - stopping all input to prevent AI voice transcription");
     // Stop mic input so we don't capture our own TTS
     stopAllInput();
     // Stop any currently playing audio/speech to avoid overlap
@@ -833,8 +1014,32 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
   // Real-time speech recognition setup
   const startRealTimeRecognition = () => {
+    console.log("🎤 Starting real-time recognition...");
+    console.log("🎤 Browser support check:", {
+      webkitSpeechRecognition: 'webkitSpeechRecognition' in window,
+      SpeechRecognition: 'SpeechRecognition' in window
+    });
+    
+    // Check if already running - but allow restart if recognition ended
+    if (recognitionRef.current && streamingRef.current) {
+      console.log("🎤 Recognition already running - skipping start");
+      return;
+    }
+    
+    // First, stop any existing recognition to prevent conflicts
+    if (recognitionRef.current) {
+      console.log("🛑 Stopping existing recognition before starting new one");
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log("🛑 Error stopping existing recognition:", e);
+      }
+      recognitionRef.current = null;
+    }
+    
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      console.log("🎤 Creating recognition instance...");
       const recognition = new SpeechRecognition();
       
       recognition.continuous = true;
@@ -842,9 +1047,22 @@ Generate 1 empathetic support response that solves problems, shows understanding
       recognition.lang = language === "German" ? "de-DE" : "en-US";
       recognition.maxAlternatives = 1;
       
+      // Add serviceURI for better recognition (if supported)
+      if ('serviceURI' in recognition) {
+        recognition.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+      }
+      
       recognition.onstart = () => {
         console.log("🎤 Real-time speech recognition started - MIC IS NOW LISTENING");
+        console.log("🎤 Recognition instance:", recognition);
+        console.log("🎤 Recognition settings:", {
+          continuous: recognition.continuous,
+          interimResults: recognition.interimResults,
+          lang: recognition.lang,
+          maxAlternatives: recognition.maxAlternatives
+        });
         setStreaming(true);
+        streamingRef.current = true; // Also set ref for immediate access
         manuallyStoppedRef.current = false; // Reset manual stop flag when starting
         setIsVoiceActive(true); // Mic is listening
         
@@ -864,9 +1082,38 @@ Generate 1 empathetic support response that solves problems, shows understanding
       };
       
       recognition.onresult = (event) => {
+        console.log("🎤 STT onresult called - event:", event);
+        console.log("🎤 Results length:", event.results.length);
+        console.log("🎤 Current states:", {
+          isTtsPlaying,
+          isTtsPlayingRef: isTtsPlayingRef.current,
+          currentAudio: !!currentAudioRef.current,
+          recognition: !!recognitionRef.current,
+          streaming
+        });
+        
         // Don't process speech input if AI is currently speaking
         if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
-          console.log("🔇 AI is speaking - ignoring user input to prevent feedback");
+          console.log("🔇 AI is speaking - ignoring ALL input to prevent AI voice transcription");
+          return;
+        }
+        
+        // Additional check: ignore any results during AI speech to prevent AI voice transcription
+        if (window.speechSynthesis && window.speechSynthesis.speaking) {
+          console.log("🔇 Browser TTS is speaking - ignoring input to prevent AI voice transcription");
+          return;
+        }
+        
+        // Additional check: if recognition was stopped, don't process results
+        if (!recognitionRef.current) {
+          console.log("🔇 Recognition was stopped - ignoring results");
+          return;
+        }
+        
+        // Additional check: if streaming is false, don't process results
+        // Use ref for immediate access to avoid timing issues
+        if (!streamingRef.current) {
+          console.log("🔇 Streaming ref is false - ignoring results");
           return;
         }
         
@@ -1023,10 +1270,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     const responseLines = responseText.split('\n').filter(line => line.trim());
                     suggestions = responseLines.map((line, index) => {
                       const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                      const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
                       return {
                         id: index + 1,
                         text: text,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        responseType: responseType
                       };
                     });
                     console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
@@ -1036,7 +1285,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     suggestions = lines.slice(0, 3).map((suggestion, index) => ({
                       id: index + 1,
                       text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                      timestamp: Date.now()
+                      timestamp: Date.now(),
+                      responseType: String.fromCharCode(65 + index) // A, B, C
                     }));
                     console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
                   }
@@ -1069,18 +1319,34 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   // Show buttons after 3 seconds
                   setTimeout(() => setShowCoachingButtons(true), 3000);
                   // Set first actual response (not question header) as the main answer and auto-play it
-                  const firstResponse = suggestions.find(s => !s.isQuestionHeader);
-                  const firstAnswer = firstResponse ? firstResponse.text : suggestions[0].text;
-                  setPredatorAnswer(firstAnswer);
+                  // For auto-play, only use Response A specifically, not B or C
+                  const firstResponse = suggestions.find(s => !s.isQuestionHeader && !s.isCombinedResponse && s.responseType === 'A');
+                  let firstAnswer = firstResponse ? firstResponse.text : suggestions.find(s => s.responseType === 'A')?.text || suggestions[0].text;
+                  
+                  // If we still have a combined response, take only the first part before any double newlines
+                  if (firstAnswer && firstAnswer.includes('\n\n')) {
+                    firstAnswer = firstAnswer.split('\n\n')[0];
+                  }
+                  
+                  // Only set Response A in Predator Answer box
+                  const responseA = suggestions.find(s => s.responseType === 'A');
+                  const predatorAnswerText = responseA ? responseA.text : "Response A not found";
+                  console.log("🎯 Response A found (2):", responseA);
+                  console.log("🎯 Predator Answer Text (2):", predatorAnswerText);
+                  setPredatorAnswer(predatorAnswerText);
                   triggerRefreshAnimation();
                   
                   // Add to conversation history with all A/B/C responses
                   addConversationEntry(captured, firstAnswer, suggestions);
                   
-                  if (speechActive) {
+                  // Process customer information for CRM
+                  processCustomerInfo(captured);
+                  
+                  if (speechActive && !userSelectingResponse) {
                     // Use TTS with selected voice for better quality
+                    console.log("🎯 Auto-playing main response:", predatorAnswerText);
                     try {
-                      const ttsResult = await runTts({ text: firstAnswer, voice: aiVoiceSelection });
+                      const ttsResult = await runTts({ text: predatorAnswerText, voice: aiVoiceSelection });
                       if (ttsResult.audioUrl) {
                         stopAllInput();
                         stopAllAudio();
@@ -1122,14 +1388,14 @@ Generate 1 empathetic support response that solves problems, shows understanding
                         };
                         audio.play().catch(e => {
                           console.error("TTS audio playback failed:", e);
-                          speakText(responseText);
+                          speakText(predatorAnswerText);
                         });
                       } else {
-                        speakText(responseText);
+                        speakText(predatorAnswerText);
                       }
                     } catch (ttsError) {
                       console.error("TTS failed:", ttsError);
-                      speakText(responseText);
+                      speakText(predatorAnswerText);
                     }
                   }
                 }
@@ -1156,52 +1422,62 @@ Generate 1 empathetic support response that solves problems, shows understanding
       };
       
       recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          showToast("Speech recognition error");
+        console.error("🎤 Speech recognition error:", event.error);
+        console.error("🎤 Error details:", event);
+        if (event.error === "not-allowed") {
+          showToast("Microphone permission denied");
+        } else if (event.error === "no-speech") {
+          console.log("🎤 No speech detected - this is normal, continuing to listen");
+          // Don't show error toast for no-speech, it's expected behavior
+        } else if (event.error === "aborted") {
+          console.log("🎤 Recognition aborted");
+        } else if (event.error === "network") {
+          console.log("🎤 Network error - speech recognition failed");
+          showToast("Network error - speech recognition failed");
+        } else if (event.error === "audio-capture") {
+          console.log("🎤 Audio capture error");
+          showToast("Audio capture error - check microphone");
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          console.log("🎤 Unknown speech recognition error:", event.error);
+          showToast("Speech recognition error: " + event.error);
         }
       };
       
       recognition.onend = () => {
-        console.log("🎤 Recognition ended, streaming:", streaming, "manuallyStopped:", manuallyStoppedRef.current, "TTS playing:", isTtsPlaying || isTtsPlayingRef.current);
+        console.log("🎤 Recognition ended");
+        console.log("🎤 End details:", {
+          streaming,
+          streamingRef: streamingRef.current,
+          manuallyStopped: manuallyStoppedRef.current,
+          ttsPlaying: isTtsPlaying || isTtsPlayingRef.current,
+          recognitionInstance: !!recognitionRef.current
+        });
         // Only restart recognition if it wasn't manually stopped
-        if (!manuallyStoppedRef.current) {
+        if (!manuallyStoppedRef.current && streamingRef.current) {
           setTimeout(() => {
             console.log("🔄 Restarting recognition...");
-            try {
-              // Create new recognition instance for restart
-              const newRecognition = new SpeechRecognition();
-              newRecognition.continuous = true;
-              newRecognition.interimResults = true;
-              newRecognition.lang = language === "German" ? "de-DE" : "en-US";
-              newRecognition.maxAlternatives = 1;
-              
-              // Copy all event handlers
-              newRecognition.onstart = recognition.onstart;
-              newRecognition.onresult = recognition.onresult;
-              newRecognition.onerror = recognition.onerror;
-              newRecognition.onend = recognition.onend;
-              
-              recognitionRef.current = newRecognition;
-              newRecognition.start();
-              setIsVoiceActive(true); // Mic is listening after restart
-              console.log("✅ Recognition restarted successfully - MIC IS ACTIVE");
-            } catch (e) {
-              console.log("❌ Recognition restart failed:", e);
-              // Try again after a longer delay
-              setTimeout(() => {
-                startRealTimeRecognition();
-              }, 1000);
-            }
-          }, 1000); // Quick restart to maintain continuous listening
+            // Use the main startRealTimeRecognition function for consistent behavior
+            startRealTimeRecognition();
+          }, 2000); // Longer delay to prevent continuous restarts
         } else {
           console.log("🛑 Recognition not restarted - was manually stopped");
         }
       };
       
       recognitionRef.current = recognition;
-      recognition.start();
-      setIsVoiceActive(true); // Mic is listening when starting
+      console.log("🎤 Starting recognition...");
+      
+      // Add a delay to ensure previous recognition is fully stopped
+      setTimeout(() => {
+        try {
+          recognition.start();
+          console.log("🎤 Recognition start() called successfully");
+          setIsVoiceActive(true); // Mic is listening when starting
+        } catch (startError) {
+          console.error("🎤 Failed to start recognition:", startError);
+          showToast("Failed to start speech recognition");
+        }
+      }, 500); // 500ms delay for better stability
     } else {
       showToast("Speech recognition not supported in this browser");
     }
@@ -1211,6 +1487,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
   const stopRealTimeRecognition = () => {
     console.log("🛑 Stopping real-time recognition - MIC WILL BE OFF");
     manuallyStoppedRef.current = true; // Set flag to prevent auto-restart
+    streamingRef.current = false; // Also set ref to false
     
     // Stop all audio playback immediately
     stopAllAudio();
@@ -1238,11 +1515,14 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
   // Handle coaching suggestion selection
   const selectCoachingSuggestion = async (suggestion) => {
+    console.log("🎯 Selecting suggestion:", suggestion.responseType, suggestion.text);
+    setUserSelectingResponse(true); // Prevent main response logic from auto-playing
     setPredatorAnswer(suggestion.text);
     
     // Only update Predator Answer box, don't add to conversation history
-    // Speak the suggestion if speech is active
+    // Play audio for all responses when clicked (A, B, C)
     if (speechActive) {
+      console.log("🎯 Playing Response", suggestion.responseType);
       // Use TTS with selected voice for better quality
       try {
         const ttsResult = await runTts({ text: suggestion.text, voice: aiVoiceSelection });
@@ -1280,6 +1560,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           setIsTtsPlaying(false);
                           isTtsPlayingRef.current = false;
                           currentAudioRef.current = null;
+                          setUserSelectingResponse(false); // Reset flag after TTS ends
                           // Restart microphone after AI speech ends
                           restartMicrophone(); 
                         };
@@ -1303,7 +1584,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
   // Removed auto-selection useEffect - Good Answer A is now auto-selected in silence timeout
 
   return (
-    <div className="min-h-screen flex flex-col p-4 sm:p-2 bg-[#f5f5f5] font-sans overflow-y-auto" style={openSansStyle}>
+    <div className={`min-h-screen flex flex-col p-4 sm:p-2 bg-[#f5f5f5] font-sans overflow-y-auto transition-all duration-300 ${crmSidebarVisible ? 'pr-80' : ''}`} style={openSansStyle}>
       {/* Google Fonts */}
       <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&family=Open+Sans:wght@400;500;600&display=swap"
@@ -1313,9 +1594,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
       
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 border border-[#000000] rounded-2xl px-4 py-3 bg-[#f5f5f5] shadow-lg">
-        <span className="font-bold text-lg sm:text-xl text-center sm:text-left" style={orbitronStyle}>
-          SELL PREDATOR Cockpit
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-lg sm:text-xl text-center sm:text-left" style={orbitronStyle}>
+            SELL PREDATOR Cockpit
+          </span>
+        </div>
 
         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
           <button 
@@ -1697,6 +1980,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
         >
           Correction
         </button>
+        <button
+          className="cursor-pointer bg-[#4CAF50] hover:bg-[#45a049] px-4 py-1.5 rounded-lg flex-1 shadow border font-medium text-white"
+          onClick={() => setCrmPanelOpen(true)}
+        >
+          CRM Panel
+        </button>
       </div>
 
       {/* Toast Notification */}
@@ -1715,6 +2004,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
           animation: fadeIn 0.5s forwards;
         }
       `}</style>
+
+      {/* CRM Sidebar */}
+      <CRMSidebar 
+        isVisible={crmSidebarVisible}
+        customerData={customerData}
+        isLoading={crmLoading}
+      />
     </div>
   );
 }

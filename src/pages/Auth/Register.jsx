@@ -423,6 +423,28 @@ export default function SignUp() {
         who = { role: "user" };
       }
 
+      // Sync user to HubSpot (non-blocking)
+      try {
+        console.log("🔄 Syncing new user to HubSpot...");
+        const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        
+        if (hubspotResponse.ok) {
+          const hubspotData = await hubspotResponse.json();
+          console.log("✅ User synced to HubSpot successfully:", hubspotData.hubspotContactId);
+        } else {
+          console.warn("⚠️ HubSpot sync failed, but continuing with registration");
+        }
+      } catch (hubspotError) {
+        console.warn("⚠️ HubSpot sync error (non-blocking):", hubspotError.message);
+        // Don't fail registration if HubSpot sync fails
+      }
+
       // Show success message
       console.log("🎉 All steps completed successfully!");
       setSuccess(true);
@@ -521,6 +543,28 @@ export default function SignUp() {
           });
           if (res.ok) who = await res.json();
         } catch (_) { }
+
+        // Sync Google user to HubSpot (non-blocking)
+        try {
+          console.log("🔄 Syncing Google user to HubSpot...");
+          const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token.value || token}`
+            }
+          });
+          
+          if (hubspotResponse.ok) {
+            const hubspotData = await hubspotResponse.json();
+            console.log("✅ Google user synced to HubSpot successfully:", hubspotData.hubspotContactId);
+          } else {
+            console.warn("⚠️ HubSpot sync failed for Google user, but continuing");
+          }
+        } catch (hubspotError) {
+          console.warn("⚠️ HubSpot sync error for Google user (non-blocking):", hubspotError.message);
+          // Don't fail Google sign-in if HubSpot sync fails
+        }
 
         showToast("Redirecting to dashboard...");
         // Optimized: Reduced redirect delay
