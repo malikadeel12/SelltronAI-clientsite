@@ -9,7 +9,7 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, searchCustomerByQuery } from "../../lib/api";
+import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, searchCustomerByQuery, extractAndStoreHighlights, extractKeyHighlights } from "../../lib/api";
 import CRMSidebar from "../../components/CRMSidebar";
 
 // Font styles
@@ -70,29 +70,32 @@ export default function PredatorDashboard() {
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
   
-  // Load Sales conversation history from localStorage (ignore support mode)
+  // Load conversation history from localStorage for both modes
   useEffect(() => {
-    if (mode === 'sales') {
-      const savedHistory = localStorage.getItem('predatorConversationHistory_sales');
-      if (savedHistory) {
-        try {
-          setConversationHistory(JSON.parse(savedHistory));
-        } catch (error) {
-          console.error('Error loading conversation history:', error);
+    const savedHistory = localStorage.getItem('predatorConversationHistory');
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory);
+        setConversationHistory(history);
+        
+        // Load all previous conversations into live transcript
+        if (history.length > 0) {
+          rebuildLiveTranscript(history);
+          setShowLiveTranscript(true);
         }
-      } else {
+      } catch (error) {
+        console.error('Error loading conversation history:', error);
         setConversationHistory([]);
       }
     } else {
-      // Support mode - show empty history
       setConversationHistory([]);
     }
-  }, [mode]);
+  }, []);
 
-  // Save Sales conversation history to localStorage whenever it changes
+  // Save conversation history to localStorage whenever it changes
   useEffect(() => {
     if (conversationHistory.length > 0) {
-      localStorage.setItem('predatorConversationHistory_sales', JSON.stringify(conversationHistory));
+      localStorage.setItem('predatorConversationHistory', JSON.stringify(conversationHistory));
     }
   }, [conversationHistory]);
   
@@ -102,36 +105,102 @@ export default function PredatorDashboard() {
     if (box) {
       box.scrollTop = box.scrollHeight;
     }
-  }, [conversationHistory, predatorAnswer]);
+  }, [conversationHistory, predatorAnswer, liveTranscript]);
 
-  // Function to add conversation entry (Sales only)
+  // Function to rebuild live transcript from conversation history
+  const rebuildLiveTranscript = (history) => {
+    if (history.length > 0) {
+      const allConversations = history.map(entry => 
+        `Customer: ${entry.userInput}\n\nPredator AI: ${entry.predatorResponse}`
+      ).join('\n\n');
+      setLiveTranscript(allConversations);
+    } else {
+      setLiveTranscript("");
+    }
+    
+    // Auto-scroll to bottom when transcript is rebuilt
+    setTimeout(() => {
+      const box = conversationBoxRef.current;
+      if (box) {
+        box.scrollTop = box.scrollHeight;
+      }
+    }, 50);
+  };
+
+  // Function to force auto-scroll to bottom
+  const forceAutoScroll = () => {
+    setTimeout(() => {
+      const box = conversationBoxRef.current;
+      if (box) {
+        box.scrollTop = box.scrollHeight;
+        console.log("🔄 Force auto-scroll triggered");
+      }
+    }, 100);
+  };
+
+  // Function to rebuild live transcript with current live query
+  const rebuildLiveTranscriptWithQuery = (history, currentQuery) => {
+    console.log("🔄 Rebuilding live transcript with query:", currentQuery);
+    
+    if (history.length > 0) {
+      const allConversations = history.map(entry => 
+        `Customer: ${entry.userInput}\n\nPredator AI: ${entry.predatorResponse}`
+      ).join('\n\n');
+      
+      if (currentQuery && currentQuery.trim()) {
+        const fullTranscript = `${allConversations}\n\nCustomer: ${currentQuery}`;
+        console.log("📝 Setting live transcript with history + current query");
+        setLiveTranscript(fullTranscript);
+      } else {
+        console.log("📝 Setting live transcript with history only");
+        setLiveTranscript(allConversations);
+      }
+    } else {
+      if (currentQuery && currentQuery.trim()) {
+        const fullTranscript = `Customer: ${currentQuery}`;
+        console.log("📝 Setting live transcript with current query only");
+        setLiveTranscript(fullTranscript);
+      } else {
+        console.log("📝 Setting empty live transcript");
+        setLiveTranscript("");
+      }
+    }
+    
+    // Force auto-scroll multiple times to ensure it works
+    forceAutoScroll();
+    setTimeout(() => forceAutoScroll(), 200);
+    setTimeout(() => forceAutoScroll(), 500);
+  };
+
+  // Function to add conversation entry (both modes)
   const addConversationEntry = (userInput, predatorResponse, suggestions = []) => {
-    if (modeRef.current !== 'sales') return; // do not store support mode history
+    // Get Response A (default response)
+    const responseA = suggestions.find(s => s.responseType === 'A')?.text || suggestions[0]?.text || '';
+    const cleanResponseA = responseA.replace(/^[ABC]:\s*/, '');
+    
     const newEntry = {
       id: Date.now(),
       timestamp: new Date().toLocaleTimeString(),
       userInput: userInput.trim(),
-      predatorResponse: predatorResponse.trim(),
-      responseA: suggestions.find(s => s.responseType === 'A')?.text || suggestions[0]?.text || '',
-      responseB: suggestions.find(s => s.responseType === 'B')?.text || suggestions[1]?.text || '',
-      responseC: suggestions.find(s => s.responseType === 'C')?.text || suggestions[2]?.text || '',
-      mode: 'sales' // Always tag as sales
+      predatorResponse: cleanResponseA.trim(),
+      mode: mode // Current mode (sales or support)
     };
     setConversationHistory(prev => {
       const updated = [...prev, newEntry];
-      // Save to Sales-only key
-      localStorage.setItem('predatorConversationHistory_sales', JSON.stringify(updated));
+      // Save to unified key
+      localStorage.setItem('predatorConversationHistory', JSON.stringify(updated));
+      // Rebuild live transcript with complete history
+      rebuildLiveTranscript(updated);
       return updated;
     });
-    // Keep current user input and predator response visible for current interaction
-    // They will be cleared when new speech starts
   };
 
-  // Function to clear Sales conversation history
+  // Function to clear conversation history
   const clearConversationHistory = () => {
     setConversationHistory([]);
-    localStorage.removeItem('predatorConversationHistory_sales');
-    showToast('Sales conversation history cleared');
+    setLiveTranscript("");
+    localStorage.removeItem('predatorConversationHistory');
+    showToast('Conversation history cleared');
   };
 
   const defaultHints = useMemo(() => ([
@@ -155,6 +224,7 @@ export default function PredatorDashboard() {
   const silenceTimeoutRef = useRef(null);
   const lastGptResponseTimeRef = useRef(0);
   const conversationBoxRef = useRef(null);
+  const heartbeatTimerRef = useRef(null);
   
   // Stop any active microphone inputs (live recognition or manual recording)
   const stopAllInput = () => {
@@ -170,6 +240,11 @@ export default function PredatorDashboard() {
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== "inactive") {
       try { rec.stop(); } catch (_) {}
+    }
+    // Clear heartbeat timer
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
     }
     // DON'T set streaming to false - keep mic always on
     setRecording(false);
@@ -189,7 +264,11 @@ export default function PredatorDashboard() {
     
     console.log("🔍 CRM: Processing customer info for transcript:", transcript);
     setLastProcessedTranscript(transcript);
-    setCrmLoading(true);
+    
+    // Silent processing - only show loading if we don't already have customer data AND this is the first time
+    if (!customerData && !crmSidebarVisible) {
+      setCrmLoading(true);
+    }
     
     try {
       // First, try to extract specific customer information from the conversation
@@ -239,6 +318,29 @@ export default function PredatorDashboard() {
                   console.log("ℹ️ CRM: HubSpot update failed, but data is still displayed correctly");
                 }
               }
+
+              // Extract and store key highlights from the conversation (silent background process)
+              try {
+                console.log("🔍 CRM: Extracting key highlights from conversation...");
+                const highlightsResult = await extractAndStoreHighlights(transcript, extractedData.email, conversationHistory);
+                if (highlightsResult.success && highlightsResult.highlights && highlightsResult.stored) {
+                  console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
+                  
+                  // Update customer data with highlights silently
+                  setCustomerData(prevData => ({
+                    ...prevData,
+                    ...highlightsResult.highlights
+                  }));
+                  
+                  // Only show toast if highlights were actually stored (meaningful data found)
+                  showToast("Key highlights updated");
+                } else {
+                  console.log("ℹ️ CRM: No meaningful highlights found in conversation - silent update skipped");
+                }
+              } catch (highlightsError) {
+                console.error("Error extracting key highlights:", highlightsError);
+                console.log("ℹ️ CRM: Key highlights extraction failed, but customer data is still available");
+              }
             } else {
               console.log("ℹ️ CRM: Customer not found in HubSpot via email - not showing sidebar");
               // Don't show sidebar or extracted data if customer not found in HubSpot
@@ -285,6 +387,31 @@ export default function PredatorDashboard() {
                   console.log("ℹ️ CRM: HubSpot update failed, but data is still displayed correctly");
                 }
               }
+
+              // Extract and store key highlights from the conversation
+              try {
+                console.log("🔍 CRM: Extracting key highlights from conversation...");
+                const highlightsResult = await extractAndStoreHighlights(transcript, mergedData.email, conversationHistory);
+                if (highlightsResult.success && highlightsResult.highlights) {
+                  console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
+                  
+                  // Update customer data with highlights
+                  setCustomerData(prevData => ({
+                    ...prevData,
+                    ...highlightsResult.highlights
+                  }));
+                  
+                  // Only show toast if highlights were actually stored
+                  if (highlightsResult.stored) {
+                    showToast("Key highlights extracted and stored");
+                  }
+                } else {
+                  console.log("ℹ️ CRM: No meaningful highlights found in conversation");
+                }
+              } catch (highlightsError) {
+                console.error("Error extracting key highlights:", highlightsError);
+                console.log("ℹ️ CRM: Key highlights extraction failed, but customer data is still available");
+              }
             } else {
               console.log("ℹ️ CRM: Customer not found in HubSpot via name/company - not showing sidebar");
               // Don't show sidebar or extracted data if customer not found in HubSpot
@@ -327,6 +454,7 @@ export default function PredatorDashboard() {
       if (!customerFound) {
         console.log("ℹ️ CRM: No customer information found in transcript");
         setCustomerData(null);
+        
       }
       
     } catch (error) {
@@ -340,6 +468,53 @@ export default function PredatorDashboard() {
 
   const toggleCrmSidebar = () => {
     setCrmSidebarVisible(!crmSidebarVisible);
+  };
+
+  // Function to extract and store highlights for existing customer
+  const processHighlightsForExistingCustomer = async (transcript) => {
+    if (!customerData || !customerData.email) {
+      console.log("ℹ️ CRM: No existing customer to store highlights for");
+      return;
+    }
+
+    try {
+      console.log("🔍 CRM: Extracting highlights for existing customer:", customerData.email);
+      const highlightsResult = await extractAndStoreHighlights(transcript, customerData.email, conversationHistory);
+      
+      if (highlightsResult.success && highlightsResult.highlights && highlightsResult.stored) {
+        console.log("✅ CRM: Highlights extracted and stored for customer:", highlightsResult.highlights);
+        
+        // Fetch updated customer data from HubSpot to get the latest highlights
+        try {
+          console.log("🔄 CRM: Fetching updated customer data from HubSpot...");
+          const { customerData: updatedData } = await getCustomerData(customerData.email);
+          if (updatedData) {
+            console.log("✅ CRM: Updated customer data fetched from HubSpot:", updatedData);
+            setCustomerData(updatedData);
+            showToast("Key highlights extracted and stored");
+          } else {
+            // Fallback: update local state if HubSpot fetch fails
+            setCustomerData(prevData => ({
+              ...prevData,
+              ...highlightsResult.highlights
+            }));
+            showToast("Key highlights extracted and stored");
+          }
+        } catch (fetchError) {
+          console.error("Error fetching updated customer data:", fetchError);
+          // Fallback: update local state
+          setCustomerData(prevData => ({
+            ...prevData,
+            ...highlightsResult.highlights
+          }));
+          showToast("Key highlights extracted and stored");
+        }
+      } else {
+        console.log("ℹ️ CRM: No meaningful highlights found in conversation");
+      }
+    } catch (highlightsError) {
+      console.error("Error extracting highlights for existing customer:", highlightsError);
+    }
   };
 
   // Function to stop all audio playback and mute microphone during AI speech
@@ -373,18 +548,36 @@ export default function PredatorDashboard() {
   // Function to restart microphone after AI speech ends
   const restartMicrophone = () => {
     console.log("🎤 Restarting microphone after AI speech ended");
-    if (streamingRef.current && !isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
+    console.log("🔍 Current states:", { 
+      streaming: streamingRef.current, 
+      isTtsPlaying, 
+      isTtsPlayingRef: isTtsPlayingRef.current, 
+      currentAudio: !!currentAudioRef.current,
+      manuallyStopped: manuallyStoppedRef.current
+    });
+    
+    // Only restart if mic wasn't manually stopped and no audio is playing
+    if (!manuallyStoppedRef.current && !isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
       setTimeout(() => {
         // Double-check that no audio is playing before restarting
-        if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
+        if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current && !manuallyStoppedRef.current) {
+          console.log("🎤 All conditions met - restarting microphone");
+          // Ensure streaming ref is set to true before starting recognition
+          streamingRef.current = true;
           startRealTimeRecognition();
           showToast("🎤 Mic is ready - speak your next query!");
         } else {
-          console.log("🔇 Audio still playing - not restarting microphone");
+          console.log("🔇 Audio still playing or mic was stopped - not restarting microphone");
         }
-      }, 1000); // Increased delay to ensure TTS has fully ended
+      }, 300); // Reduced delay from 1000ms to 300ms for faster restart
     } else {
-      console.log("🔇 Not restarting microphone - conditions not met:", { streaming, isTtsPlaying, isTtsPlayingRef: isTtsPlayingRef.current, currentAudio: !!currentAudioRef.current });
+      console.log("🔇 Not restarting microphone - conditions not met:", { 
+        streaming: streamingRef.current, 
+        isTtsPlaying, 
+        isTtsPlayingRef: isTtsPlayingRef.current, 
+        currentAudio: !!currentAudioRef.current,
+        manuallyStopped: manuallyStoppedRef.current
+      });
     }
   };
 
@@ -458,8 +651,10 @@ export default function PredatorDashboard() {
     setShowCoachingButtons(true);
   }, []);
 
-  // Purge any existing Support history once
+  // Clean up old localStorage keys on component mount
   useEffect(() => {
+    // Remove old localStorage keys
+    localStorage.removeItem('predatorConversationHistory_sales');
     localStorage.removeItem('predatorConversationHistory_support');
   }, []);
 
@@ -500,6 +695,11 @@ export default function PredatorDashboard() {
   useEffect(() => {
     return () => {
       stopAllAudio();
+      // Clear heartbeat timer on unmount
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -693,13 +893,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Switch to conversation history view when response arrives (except in support mode)
-                  if (modeRef.current !== 'support') {
-                    setShowLiveTranscript(false);
-                  } else {
-                    // In support mode, keep live transcript showing user's query
-                    setShowLiveTranscript(true);
-                  }
+                  // Keep live transcript showing Response A (default response)
+                  setShowLiveTranscript(true);
                   // Hide buttons when new response arrives
                   setShowCoachingButtons(false);
                   // Trigger button animation for new responses
@@ -723,12 +918,21 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   console.log("🎯 Response A found:", responseA);
                   console.log("🎯 Predator Answer Text:", predatorAnswerText);
                   setPredatorAnswer(predatorAnswerText);
+                  
+                  // Live transcript will be updated by addConversationEntry function
+                  
                   triggerRefreshAnimation();                  
                   // Add to conversation history for pipeline path
                   addConversationEntry(t, firstAnswer, suggestions);
                   
                   // Process customer information for CRM
                   processCustomerInfo(t);
+                  
+                  // If customer already exists, also process highlights for them
+                  if (customerData && customerData.email) {
+                    processHighlightsForExistingCustomer(t);
+                  }
+                  
                   // Auto-play logic removed from recording pipeline - handled in live recognition pipeline
                 }
               }
@@ -1020,6 +1224,10 @@ Generate 1 empathetic support response that solves problems, shows understanding
       SpeechRecognition: 'SpeechRecognition' in window
     });
     
+    // Reset manual stop flag when explicitly starting recognition
+    manuallyStoppedRef.current = false;
+    console.log("🎤 Reset manuallyStoppedRef to false - allowing restart");
+    
     // Check if already running - but allow restart if recognition ended
     if (recognitionRef.current && streamingRef.current) {
       console.log("🎤 Recognition already running - skipping start");
@@ -1035,6 +1243,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
         console.log("🛑 Error stopping existing recognition:", e);
       }
       recognitionRef.current = null;
+    }
+    
+    // Clear any existing heartbeat timer
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
     }
     
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -1065,6 +1279,17 @@ Generate 1 empathetic support response that solves problems, shows understanding
         streamingRef.current = true; // Also set ref for immediate access
         manuallyStoppedRef.current = false; // Reset manual stop flag when starting
         setIsVoiceActive(true); // Mic is listening
+        
+        // Start heartbeat mechanism to ensure continuous listening
+        heartbeatTimerRef.current = setInterval(() => {
+          if (!manuallyStoppedRef.current && streamingRef.current) {
+            // Check if recognition is still active
+            if (!recognitionRef.current || recognitionRef.current.state === 'inactive') {
+              console.log("🔄 Heartbeat detected inactive recognition - restarting immediately");
+              startRealTimeRecognition();
+            }
+          }
+        }, 1000); // Check every 1 second
         
         // Only stop audio if TTS is not actively playing - allow TTS to continue
         console.log("🔇 Checking TTS state:", isTtsPlaying, "TTS ref:", isTtsPlayingRef.current, "Current audio:", currentAudioRef.current);
@@ -1122,10 +1347,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
         let interimTranscript = '';
         let finalTranscript = '';
         
-        // Clear live STT immediately when new speech segment starts
+        // Switch to live transcript view when user starts speaking (don't clear existing content)
         if (event.resultIndex === 0) {
-          setLiveTranscript("");
-          // Switch to live transcript view when user starts speaking
           setShowLiveTranscript(true);
         }
         
@@ -1148,15 +1371,25 @@ Generate 1 empathetic support response that solves problems, shows understanding
           }
         }
         
-        // Update current user input for display
+        // Update current user input for display (separate from live transcript)
         if (finalTranscript) {
           setCurrentUserInput(finalTranscript.trim());
         } else if (interimTranscript) {
           setCurrentUserInput(interimTranscript);
         }
         
-        // Update live transcript with both final and interim results
-        if (finalTranscript) {
+        // Auto-scroll whenever there's any speech activity
+        if (finalTranscript || interimTranscript) {
+          setTimeout(() => {
+            const box = conversationBoxRef.current;
+            if (box) {
+              box.scrollTop = box.scrollHeight;
+            }
+          }, 50);
+        }
+        
+        // Update live transcript to show history + current live query
+        if (finalTranscript || interimTranscript) {
           // If TTS is playing and user is speaking, stop TTS immediately
           if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
             console.log("🔇 User is speaking - stopping current TTS response");
@@ -1165,11 +1398,23 @@ Generate 1 empathetic support response that solves problems, shows understanding
           
           // Use only new speech content, don't append to old transcript
           setTranscript(finalTranscript);
-          // In support mode, show only current query; in sales mode, show accumulated
-          if (modeRef.current === 'support') {
-            setLiveTranscript(finalTranscript + interimTranscript);
-          } else {
-            setLiveTranscript(finalTranscript + interimTranscript);
+          
+          // Show history + current live query
+          const currentQuery = finalTranscript + interimTranscript;
+          console.log("🎤 Current query being processed:", currentQuery);
+          console.log("📚 Conversation history length:", conversationHistory.length);
+          
+          if (currentQuery.trim()) {
+            rebuildLiveTranscriptWithQuery(conversationHistory, currentQuery);
+            
+            // Force auto-scroll to bottom immediately
+            setTimeout(() => {
+              const box = conversationBoxRef.current;
+              if (box) {
+                box.scrollTop = box.scrollHeight;
+                console.log("🔄 Auto-scrolling to bottom for live query");
+              }
+            }, 100);
           }
           
           // Debounce silence: after ~2s of no more finals, call GPT and update answer
@@ -1185,10 +1430,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
               // Stop any playing audio before processing new response
               stopAllAudio();
               
-              // In support mode, keep the user's query visible in live transcript during processing
-              if (modeRef.current === 'support') {
-                setLiveTranscript(captured);
-              }
+              // Keep existing live transcript content during processing
+              // Don't clear it, just keep what's already there
+              setCurrentUserInput("");
               
               // Get responses from GPT based on current mode
               const currentMode = modeRef.current; // Use ref for immediate value
@@ -1304,13 +1548,8 @@ Generate 1 empathetic support response that solves problems, shows understanding
                 
                 if (suggestions.length > 0) {
                   setCoachingSuggestions(suggestions);
-                  // Switch to conversation history view when response arrives (except in support mode)
-                  if (modeRef.current !== 'support') {
-                    setShowLiveTranscript(false);
-                  } else {
-                    // In support mode, keep live transcript showing user's query
-                    setShowLiveTranscript(true);
-                  }
+                  // Keep live transcript showing Response A (default response)
+                  setShowLiveTranscript(true);
                   // Hide buttons when new response arrives
                   setShowCoachingButtons(false);
                   // Trigger button animation for new responses
@@ -1334,6 +1573,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   console.log("🎯 Response A found (2):", responseA);
                   console.log("🎯 Predator Answer Text (2):", predatorAnswerText);
                   setPredatorAnswer(predatorAnswerText);
+                  
+                  // Live transcript will be updated by addConversationEntry function
+                  
                   triggerRefreshAnimation();
                   
                   // Add to conversation history with all A/B/C responses
@@ -1341,6 +1583,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   
                   // Process customer information for CRM
                   processCustomerInfo(captured);
+                  
+                  // If customer already exists, also process highlights for them
+                  if (customerData && customerData.email) {
+                    processHighlightsForExistingCustomer(captured);
+                  }
                   
                   if (speechActive && !userSelectingResponse) {
                     // Use TTS with selected voice for better quality
@@ -1380,6 +1627,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           console.log("🔊 TTS audio ended, streaming:", streaming);
                           console.log("🔊 TTS audio ended");
                           setIsTtsPlaying(false);
+                          isTtsPlayingRef.current = false;
                           currentAudioRef.current = null;
                           // Restart microphone after AI speech ends
                           restartMicrophone();
@@ -1454,11 +1702,9 @@ Generate 1 empathetic support response that solves problems, shows understanding
         });
         // Only restart recognition if it wasn't manually stopped
         if (!manuallyStoppedRef.current && streamingRef.current) {
-          setTimeout(() => {
-            console.log("🔄 Restarting recognition...");
-            // Use the main startRealTimeRecognition function for consistent behavior
-            startRealTimeRecognition();
-          }, 2000); // Longer delay to prevent continuous restarts
+          // Immediate restart for truly continuous listening
+          console.log("🔄 Immediate restart for continuous listening...");
+          startRealTimeRecognition();
         } else {
           console.log("🛑 Recognition not restarted - was manually stopped");
         }
@@ -1473,9 +1719,24 @@ Generate 1 empathetic support response that solves problems, shows understanding
           recognition.start();
           console.log("🎤 Recognition start() called successfully");
           setIsVoiceActive(true); // Mic is listening when starting
+          
+          // Add a backup restart mechanism in case recognition fails to start properly
+          setTimeout(() => {
+            if (!streamingRef.current && !manuallyStoppedRef.current) {
+              console.log("🔄 Backup restart - recognition may not have started properly");
+              startRealTimeRecognition();
+            }
+          }, 1000);
         } catch (startError) {
           console.error("🎤 Failed to start recognition:", startError);
           showToast("Failed to start speech recognition");
+          // Retry once after a short delay
+          setTimeout(() => {
+            if (!manuallyStoppedRef.current && streamingRef.current) {
+              console.log("🔄 Retrying recognition start after error");
+              startRealTimeRecognition();
+            }
+          }, 1000);
         }
       }, 500); // 500ms delay for better stability
     } else {
@@ -1491,6 +1752,12 @@ Generate 1 empathetic support response that solves problems, shows understanding
     
     // Stop all audio playback immediately
     stopAllAudio();
+    
+    // Clear heartbeat timer
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
     
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -1704,13 +1971,13 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
 
           {/* Live Transcript or Conversation History Display */}
-          <div ref={conversationBoxRef} className="w-full h-[60vh] border-2 border-[#D72638] rounded-2xl p-3 shadow-sm overflow-y-auto mb-3">
+          <div ref={conversationBoxRef} className={`w-full h-[60vh] border-2 border-[#D72638] rounded-2xl p-3 shadow-sm mb-3 ${showLiveTranscript ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             {showLiveTranscript ? (
               /* Live Transcript View */
               <textarea
                 value={liveTranscript}
                 onChange={(e) => setLiveTranscript(e.target.value)}
-                className="w-full h-full border-none resize-none focus:ring-0 outline-none bg-transparent text-black"
+                className="w-full h-full border-none resize-none focus:ring-0 outline-none bg-transparent text-black overflow-y-auto"
                 placeholder={streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
               />
             ) : (
@@ -1730,23 +1997,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           <div className="text-xs text-gray-500 mt-2">{entry.timestamp}</div>
                         </div>
                         
-                        {/* Response A, B, C - only show if they exist and are not empty */}
-                        {entry.responseA && entry.responseA.trim() && (
+                        {/* Predator AI Response A (default response) */}
+                        {entry.predatorResponse && entry.predatorResponse.trim() && (
                           <div className="p-3 mb-2 bg-blue-50 rounded-lg">
-                            <div className="text-sm font-semibold mb-1">Response A:</div>
-                            <div className="text-sm">{entry.responseA}</div>
-                          </div>
-                        )}
-                        {entry.responseB && entry.responseB.trim() && (
-                          <div className="p-3 mb-2 bg-green-50 rounded-lg">
-                            <div className="text-sm font-semibold mb-1">Response B:</div>
-                            <div className="text-sm">{entry.responseB}</div>
-                          </div>
-                        )}
-                        {entry.responseC && entry.responseC.trim() && (
-                          <div className="p-3 mb-2 bg-purple-50 rounded-lg">
-                            <div className="text-sm font-semibold mb-1">Response C:</div>
-                            <div className="text-sm">{entry.responseC}</div>
+                            <div className="text-sm font-semibold mb-1">Predator AI:</div>
+                            <div className="text-sm">{entry.predatorResponse}</div>
                           </div>
                         )}
                       </div>
@@ -1979,12 +2234,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
           onClick={() => handleOtherButton("Correction")}
         >
           Correction
-        </button>
-        <button
-          className="cursor-pointer bg-[#4CAF50] hover:bg-[#45a049] px-4 py-1.5 rounded-lg flex-1 shadow border font-medium text-white"
-          onClick={() => setCrmPanelOpen(true)}
-        >
-          CRM Panel
         </button>
       </div>
 
