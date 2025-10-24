@@ -323,7 +323,7 @@ export default function PredatorDashboard() {
               try {
                 console.log("🔍 CRM: Extracting key highlights from conversation...");
                 const highlightsResult = await extractAndStoreHighlights(transcript, extractedData.email, conversationHistory);
-                if (highlightsResult.success && highlightsResult.highlights && highlightsResult.stored) {
+                if (highlightsResult.success && highlightsResult.highlights) {
                   console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
                   
                   // Update customer data with highlights silently
@@ -977,92 +977,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
     }
   };
 
-  const handleBrowserSTT = async (blob) => {
-    console.log("🎤 Using browser Speech Recognition...");
-    showToast("Using browser speech recognition...");
-    
-    try {
-      // Create audio element and play it for browser STT
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      
-      // Use Web Speech API for transcription
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = language === "German" ? "de-DE" : "en-US";
-        
-        recognition.onresult = async (event) => {
-          const transcript = event.results[0][0].transcript;
-          console.log("🎯 Browser STT result:", transcript);
-          setTranscript(transcript);
-          
-          // Get GPT response
-          try {
-            const { responseText } = await runGpt({ transcript, mode, conversationHistory });
-            setPredatorAnswer(responseText);
-            
-            // Trigger refresh animation for new response
-            if (responseText) {
-              triggerRefreshAnimation();
-            }
-            
-            // Don't auto-play here - let the main response handling logic handle it
-            // if (speechActive && responseText) {
-            //   const firstResponse = getFirstIndividualResponse(responseText);
-            //   speakText(firstResponse);
-            // }
-            
-            triggerConfetti();
-            showToast("Ready");
-          } catch (error) {
-            console.error("GPT Error:", error);
-            showToast("GPT failed");
-          }
-        };
-        
-        recognition.onerror = (event) => {
-          console.error("Browser STT Error:", event.error);
-          showToast("Speech recognition failed");
-        };
-        
-        recognition.start();
-      } else {
-        showToast("Speech recognition not supported");
-      }
-    } catch (error) {
-      console.error("Browser STT Error:", error);
-      showToast("Speech recognition failed");
-    }
-  };
 
-  const handleTranscribe = async () => {
-    if (!recordedChunksRef.current.length) {
-      showToast("No audio recorded");
-      return;
-    }
-    setTranscribing(true);
-    showToast("Transcribing...");
-    try {
-      const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
-      const { transcript: t } = await runStt({ 
-        audioBlob: blob, 
-        language: language === "German" ? "de-DE" : "en-US",
-        encoding: encodingRef.current,
-        hints: defaultHints,
-        boost: sttBoost,
-        sttModel
-      });
-      setHighlights(`Transcription: ${t}`);
-    } catch (e) {
-      showToast("STT failed");
-    } finally {
-      setTranscribing(false);
-    }
-  };
 
   const handleSubmitAsk = async () => {
     if (!askText.trim()) return;
@@ -1139,45 +1054,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
   // removed unused handleGoodAnswer
 
-  const handleOtherButton = (name) => {
-    const answer = `${name} clicked. Showing dummy response.`;
-    setPredatorAnswer(answer);
-    triggerConfetti();
-    showToast(`${name} executed`);
-  };
 
-  // Helper function to extract first individual response from response text
-  const getFirstIndividualResponse = (responseText) => {
-    if (!responseText) return responseText;
-    
-    // If response contains multiple responses (A, B, C format)
-    if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-      // Find the first Response A: line
-      const lines = responseText.split('\n');
-      const firstResponseLine = lines.find(line => line.includes("Response A:"));
-      if (firstResponseLine) {
-        return firstResponseLine.replace(/^Response A:\s*/, '').trim();
-      }
-    }
-    
-    // If response contains multiple responses separated by newlines
-    if (responseText.includes('\n\n')) {
-      return responseText.split('\n\n')[0];
-    }
-    
-    // If response contains numbered or bulleted responses
-    const lines = responseText.split('\n');
-    if (lines.length > 1) {
-      // Take the first non-empty line that doesn't look like a header
-      const firstLine = lines.find(line => line.trim() && !line.match(/^\d+\.?\s*$/) && !line.match(/^-\s*$/));
-      if (firstLine) {
-        return firstLine.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim();
-      }
-    }
-    
-    // Return the full text if no pattern matches
-    return responseText;
-  };
 
   // Helper function to handle TTS consistently
   const speakText = (text) => {
@@ -2026,12 +1903,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
             Whisper
           </h2>
           <input type="file" className="mb-3 text-sm cursor-pointer" />
-          <button
-            className="cursor-pointer border rounded-lg px-4 py-1.5 mb-3 shadow hover:bg-[#f5f5f5] w-full sm:w-auto flex items-center justify-center gap-2"
-            onClick={handleTranscribe}
-          >
-            {transcribing && <span className="animate-spin">⏳</span>} Transcribe
-          </button>
 
           <div className="flex flex-col mb-3">
             <label className="font-medium mb-1 text-sm cursor-pointer">Language</label>
@@ -2222,20 +2093,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 mt-4 mb-2">
-        <button
-          className="cursor-pointer bg-[#f5f5f5] hover:bg-[#f5f5f5] px-4 py-1.5 rounded-lg flex-1 shadow font-medium border border-[#000000]"
-          onClick={() => handleOtherButton("TTS")}
-        >
-          TTS
-        </button>
-        <button
-          className="cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-1.5 rounded-lg flex-1 shadow border font-medium"
-          onClick={() => handleOtherButton("Correction")}
-        >
-          Correction
-        </button>
-      </div>
 
       {/* Toast Notification */}
       {toast.show && (
