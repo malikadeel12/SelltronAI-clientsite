@@ -9,7 +9,7 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, searchCustomerByQuery, extractAndStoreHighlights, extractKeyHighlights } from "../../lib/api";
+import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, extractKeyHighlights } from "../../lib/api";
 import CRMSidebar from "../../components/CRMSidebar";
 
 // Font styles
@@ -29,7 +29,6 @@ export default function PredatorDashboard() {
   const [aiVoiceSelection, setAiVoiceSelection] = useState("en-US-Wavenet-D");
   const [speechActive, setSpeechActive] = useState(true);
   const [transcript, setTranscript] = useState("");
-  const [highlights, setHighlights] = useState("");
   const [predatorAnswer, setPredatorAnswer] = useState("");
   const [askText, setAskText] = useState("");
   const [toast, setToast] = useState({ show: false, message: "" });
@@ -63,6 +62,7 @@ export default function PredatorDashboard() {
   // CRM Panel state
   const [crmSidebarVisible, setCrmSidebarVisible] = useState(false);
   const [customerData, setCustomerData] = useState(null);
+  const [keyHighlights, setKeyHighlights] = useState({});
   const [crmLoading, setCrmLoading] = useState(false);
   const [userSelectingResponse, setUserSelectingResponse] = useState(false);
   const [lastProcessedTranscript, setLastProcessedTranscript] = useState("");
@@ -265,15 +265,30 @@ export default function PredatorDashboard() {
     console.log("🔍 CRM: Processing customer info for transcript:", transcript);
     setLastProcessedTranscript(transcript);
     
-    // Silent processing - only show loading if we don't already have customer data AND this is the first time
-    if (!customerData && !crmSidebarVisible) {
-      setCrmLoading(true);
-    }
-    
     try {
       // First, try to extract specific customer information from the conversation
       const { extractedData } = await extractCustomerInfo(transcript, conversationHistory);
       console.log("🔍 CRM: Extracted data:", extractedData);
+      
+      // Also extract key highlights from the conversation
+      const { keyHighlights: extractedHighlights } = await extractKeyHighlights(transcript, conversationHistory);
+      if (extractedHighlights && Object.keys(extractedHighlights).length > 0) {
+        setKeyHighlights(extractedHighlights);
+        console.log("🔍 CRM: Extracted key highlights:", extractedHighlights);
+      }
+      
+      // Only proceed if we found actual customer information
+      if (!extractedData || (!extractedData.email && !extractedData.name && !extractedData.phone && !extractedData.company)) {
+        console.log("ℹ️ CRM: No customer information found in transcript - skipping CRM processing");
+        return;
+      }
+      
+      console.log("✅ CRM: Customer information found - proceeding with CRM processing");
+      
+      // Silent processing - only show loading if we don't already have customer data AND this is the first time
+      if (!customerData && !crmSidebarVisible) {
+        setCrmLoading(true);
+      }
       
       let customerFound = false;
       
@@ -302,7 +317,7 @@ export default function PredatorDashboard() {
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
                   console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
-                  await updateCustomerData(existingCustomer);
+                  await updateCustomerData(extractedData);
                   showToast("Customer data updated in HubSpot CRM");
                   console.log("✅ CRM: Customer data updated in HubSpot successfully");
                 } catch (updateError) {
@@ -311,25 +326,6 @@ export default function PredatorDashboard() {
                 }
               }
 
-              // Extract and store key highlights from the conversation (silent background process)
-              try {
-                console.log("🔍 CRM: Extracting key highlights from conversation...");
-                const highlightsResult = await extractAndStoreHighlights(transcript, extractedData.email, conversationHistory);
-                if (highlightsResult.success && highlightsResult.highlights) {
-                  console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
-                  
-                  // Highlights are stored in HubSpot, no need to update local state
-                  // CRM sidebar will show only HubSpot data as requested
-                  
-                  // Only show toast if highlights were actually stored (meaningful data found)
-                  showToast("Key highlights updated");
-                } else {
-                  console.log("ℹ️ CRM: No meaningful highlights found in conversation - silent update skipped");
-                }
-              } catch (highlightsError) {
-                console.error("Error extracting key highlights:", highlightsError);
-                console.log("ℹ️ CRM: Key highlights extraction failed, but customer data is still available");
-              }
             } else {
               console.log("ℹ️ CRM: Customer not found in HubSpot via email - not showing sidebar");
               // Don't show sidebar or extracted data if customer not found in HubSpot
@@ -360,7 +356,7 @@ export default function PredatorDashboard() {
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
                   console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
-                  await updateCustomerData(existingCustomer);
+                  await updateCustomerData(extractedData);
                   showToast("Customer data updated in HubSpot CRM");
                   console.log("✅ CRM: Customer data updated in HubSpot successfully");
                 } catch (updateError) {
@@ -369,27 +365,6 @@ export default function PredatorDashboard() {
                 }
               }
 
-              // Extract and store key highlights from the conversation
-              try {
-                console.log("🔍 CRM: Extracting key highlights from conversation...");
-                const highlightsResult = await extractAndStoreHighlights(transcript, existingCustomer.email, conversationHistory);
-                if (highlightsResult.success && highlightsResult.highlights) {
-                  console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
-                  
-                  // Highlights are stored in HubSpot, no need to update local state
-                  // CRM sidebar will show only HubSpot data as requested
-                  
-                  // Only show toast if highlights were actually stored
-                  if (highlightsResult.stored) {
-                    showToast("Key highlights extracted and stored");
-                  }
-                } else {
-                  console.log("ℹ️ CRM: No meaningful highlights found in conversation");
-                }
-              } catch (highlightsError) {
-                console.error("Error extracting key highlights:", highlightsError);
-                console.log("ℹ️ CRM: Key highlights extraction failed, but customer data is still available");
-              }
             } else {
               console.log("ℹ️ CRM: Customer not found in HubSpot via name/company - not showing sidebar");
               // Don't show sidebar or extracted data if customer not found in HubSpot
@@ -402,32 +377,6 @@ export default function PredatorDashboard() {
         }
       }
       
-      // Method 2: If no specific customer info found, try searching HubSpot with the entire query
-      if (!customerFound) {
-        console.log("🔍 CRM: No specific customer info found, trying query-based search...");
-        try {
-          // Extract just the user's question from the transcript
-          const userQuestion = transcript.match(/Customer said:\s*"([^"]+)"/i);
-          const query = userQuestion ? userQuestion[1] : transcript;
-          
-          console.log("🔍 CRM: Searching HubSpot with query:", query);
-          const searchResult = await searchCustomerByQuery(query, conversationHistory);
-          
-          if (searchResult && searchResult.foundCustomer) {
-            console.log("✅ CRM: Customer found via query search, opening sidebar");
-            console.log("🔍 CRM: Found customer data:", searchResult.foundCustomer);
-            setCrmSidebarVisible(true);
-            setCustomerData(searchResult.foundCustomer);
-            showToast(`Customer found via ${searchResult.searchMethod}: ${searchResult.message}`);
-            customerFound = true;
-          } else {
-            console.log("ℹ️ CRM: No customer found via query search");
-            console.log("🔍 CRM: Search result:", searchResult);
-          }
-        } catch (error) {
-          console.error("Error searching customer by query:", error);
-        }
-      }
       
       if (!customerFound) {
         console.log("ℹ️ CRM: No customer information found in transcript");
@@ -448,46 +397,6 @@ export default function PredatorDashboard() {
     setCrmSidebarVisible(!crmSidebarVisible);
   };
 
-  // Function to extract and store highlights for existing customer
-  const processHighlightsForExistingCustomer = async (transcript) => {
-    if (!customerData || !customerData.email) {
-      console.log("ℹ️ CRM: No existing customer to store highlights for");
-      return;
-    }
-
-    try {
-      console.log("🔍 CRM: Extracting highlights for existing customer:", customerData.email);
-      const highlightsResult = await extractAndStoreHighlights(transcript, customerData.email, conversationHistory);
-      
-      if (highlightsResult.success && highlightsResult.highlights && highlightsResult.stored) {
-        console.log("✅ CRM: Highlights extracted and stored for customer:", highlightsResult.highlights);
-        
-        // Fetch updated customer data from HubSpot to get the latest highlights
-        try {
-          console.log("🔄 CRM: Fetching updated customer data from HubSpot...");
-          const { customerData: updatedData } = await getCustomerData(customerData.email);
-          if (updatedData) {
-            console.log("✅ CRM: Updated customer data fetched from HubSpot:", updatedData);
-            setCustomerData(updatedData);
-            showToast("Key highlights extracted and stored");
-          } else {
-            // HubSpot fetch failed, but highlights were stored
-            // CRM sidebar will show only HubSpot data as requested
-            showToast("Key highlights extracted and stored");
-          }
-        } catch (fetchError) {
-          console.error("Error fetching updated customer data:", fetchError);
-          // HubSpot fetch failed, but highlights were stored
-          // CRM sidebar will show only HubSpot data as requested
-          showToast("Key highlights extracted and stored");
-        }
-      } else {
-        console.log("ℹ️ CRM: No meaningful highlights found in conversation");
-      }
-    } catch (highlightsError) {
-      console.error("Error extracting highlights for existing customer:", highlightsError);
-    }
-  };
 
   // Function to stop all audio playback and mute microphone during AI speech
   const stopAllAudio = () => {
@@ -738,7 +647,7 @@ export default function PredatorDashboard() {
             if (!recordedChunksRef.current.length) return;
             const blob = new Blob(recordedChunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
             const speedTimer = startSpeedTimer();
-            const { transcript: t } = await runVoicePipeline({
+            const { transcript: t, keyHighlights } = await runVoicePipeline({
               audioBlob: blob,
               mode,
               voice: aiVoiceSelection, // Use selected AI voice
@@ -751,6 +660,12 @@ export default function PredatorDashboard() {
             });
             
             if (t && t.trim()) {
+              // Update key highlights if available
+              if (keyHighlights && Object.keys(keyHighlights).length > 0) {
+                setKeyHighlights(keyHighlights);
+                console.log("🔍 Updated key highlights:", keyHighlights);
+              }
+              
               // Get responses from GPT based on current mode
               const currentMode = modeRef.current; // Use ref for immediate value
               const prompt = currentMode === "sales" 
@@ -900,10 +815,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   // Process customer information for CRM
                   processCustomerInfo(t);
                   
-                  // If customer already exists, also process highlights for them
-                  if (customerData && customerData.email) {
-                    processHighlightsForExistingCustomer(t);
-                  }
                   
                   // Auto-play logic removed from recording pipeline - handled in live recognition pipeline
                 }
@@ -1433,10 +1344,6 @@ Generate 1 empathetic support response that solves problems, shows understanding
                   // Process customer information for CRM
                   processCustomerInfo(captured);
                   
-                  // If customer already exists, also process highlights for them
-                  if (customerData && customerData.email) {
-                    processHighlightsForExistingCustomer(captured);
-                  }
                   
                   if (speechActive && !userSelectingResponse) {
                     // Use TTS with selected voice for better quality
@@ -1889,12 +1796,11 @@ Generate 1 empathetic support response that solves problems, shows understanding
           </div>
 
           <h3 className="font-bold text-base mb-2" style={orbitronStyle}>
-            Highlights & Conversion History
+            Notes & Conversion History
           </h3>
           <textarea
-            value={highlights}
-            onChange={(e) => setHighlights(e.target.value)}
             className="w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm resize-none focus:ring-2 focus:ring-[#FFD700] outline-none overflow-y-auto"
+            placeholder="Add your notes and conversion history here..."
           />
         </div>
 
@@ -2088,6 +1994,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
         isVisible={crmSidebarVisible}
         customerData={customerData}
         isLoading={crmLoading}
+        keyHighlights={keyHighlights}
       />
     </div>
   );

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { saveKeyHighlightsToHubSpot } from '../lib/api.js';
 
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -8,8 +9,47 @@ const openSansStyle = {
   fontFamily: "'Open Sans', sans-serif",
 };
 
-const CRMSidebar = ({ customerData, isLoading, isVisible }) => {
+const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [highlightsSaved, setHighlightsSaved] = useState(false);
+
+  // Auto-save key highlights to HubSpot when they are displayed
+  useEffect(() => {
+    const saveHighlightsToHubSpot = async () => {
+      // Only save if:
+      // 1. We have customer data with email
+      // 2. We have key highlights to save
+      // 3. We haven't already saved these highlights
+      // 4. We're not currently loading
+      if (
+        customerData?.email && 
+        Object.keys(keyHighlights).length > 0 && 
+        !highlightsSaved && 
+        !isLoading
+      ) {
+        try {
+          console.log('💾 CRM Sidebar: Auto-saving key highlights to HubSpot:', {
+            email: customerData.email,
+            keyHighlights
+          });
+          
+          await saveKeyHighlightsToHubSpot(customerData.email, keyHighlights);
+          setHighlightsSaved(true);
+          console.log('✅ CRM Sidebar: Key highlights saved successfully to HubSpot');
+        } catch (error) {
+          console.error('❌ CRM Sidebar: Failed to save key highlights to HubSpot:', error);
+          // Don't set highlightsSaved to true on error, so we can retry
+        }
+      }
+    };
+
+    saveHighlightsToHubSpot();
+  }, [customerData?.email, keyHighlights, highlightsSaved, isLoading]);
+
+  // Reset highlights saved flag when customer changes
+  useEffect(() => {
+    setHighlightsSaved(false);
+  }, [customerData?.email]);
   return (
     <>
       {/* Google Fonts */}
@@ -134,12 +174,9 @@ const CRMSidebar = ({ customerData, isLoading, isVisible }) => {
               </div>
             </div>
 
-
             {/* Key Highlights Section */}
-            {(customerData.budget || customerData.timeline || customerData.decision_makers || 
-              customerData.pain_points || customerData.objectives || customerData.urgency || 
-              customerData.competitors || customerData.use_case) && (
-              <div className="bg-gradient-to-r from-[#ffffff] to-[#f0f0f0] rounded-lg p-4 border border-[#FFD700]">
+            {Object.keys(keyHighlights).length > 0 && (
+              <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
                 <h4 className="font-medium text-[#000000] mb-3 flex items-center" style={orbitronStyle}>
                   <svg className="w-5 h-5 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -147,94 +184,56 @@ const CRMSidebar = ({ customerData, isLoading, isVisible }) => {
                   Key Highlights
                 </h4>
                 <div className="space-y-3">
-                  {customerData.budget && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {keyHighlights.budget && (
+                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                         </svg>
-                        Budget:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.budget}</span>
+                        <div>
+                          <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Budget:</span>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.budget}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  {customerData.timeline && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {keyHighlights.timeline && (
+                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Timeline:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.timeline}</span>
+                        <div>
+                          <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Timeline:</span>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.timeline}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  {customerData.decision_makers && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  {keyHighlights.objections && (
+                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Decision Makers:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.decision_makers}</span>
+                        <div>
+                          <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Objections:</span>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.objections}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  {customerData.pain_points && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  {keyHighlights.importantInfo && (
+                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Pain Points:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.pain_points}</span>
-                    </div>
-                  )}
-                  {customerData.objectives && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Objectives:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.objectives}</span>
-                    </div>
-                  )}
-                  {customerData.urgency && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Urgency:
-                      </span>
-                      <span className={`text-sm font-medium ${customerData.urgency === 'urgent' ? 'text-red-400' : customerData.urgency === 'moderate' ? 'text-yellow-400' : 'text-green-400'}`} style={openSansStyle}>
-                        {customerData.urgency}
-                      </span>
-                    </div>
-                  )}
-                  {customerData.competitors && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        Competitors:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.competitors}</span>
-                    </div>
-                  )}
-                  {customerData.use_case && (
-                    <div className="flex justify-between items-center py-2 border-b border-[#FFD700]">
-                      <span className="text-sm text-[#666666] flex items-center" style={openSansStyle}>
-                        <svg className="w-4 h-4 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                        </svg>
-                        Use Case:
-                      </span>
-                      <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>{customerData.use_case}</span>
+                        <div>
+                          <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Important Info:</span>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.importantInfo}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -248,6 +247,44 @@ const CRMSidebar = ({ customerData, isLoading, isVisible }) => {
                 <span className="text-sm text-[#FFD700] font-medium" style={openSansStyle}>Data synced with HubSpot</span>
               </div>
             </div>
+
+            {/* Key Highlights Save Status */}
+            {Object.keys(keyHighlights).length > 0 && (
+              <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {highlightsSaved ? (
+                      <>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-green-600 font-medium" style={openSansStyle}>Key highlights saved to HubSpot</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-yellow-600 font-medium" style={openSansStyle}>Saving key highlights to HubSpot...</span>
+                      </>
+                    )}
+                  </div>
+                  {!highlightsSaved && customerData?.email && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await saveKeyHighlightsToHubSpot(customerData.email, keyHighlights);
+                          setHighlightsSaved(true);
+                          console.log('✅ Manual save successful');
+                        } catch (error) {
+                          console.error('❌ Manual save failed:', error);
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-[#FFD700] text-[#000000] rounded hover:bg-[#FFD700]/80 transition-colors"
+                      style={openSansStyle}
+                    >
+                      Save Now
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">

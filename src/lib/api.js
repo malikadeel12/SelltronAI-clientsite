@@ -280,27 +280,6 @@ export async function searchCustomerByNameOrCompany(name, company) {
   return res.json();
 }
 
-export async function searchCustomerByQuery(query, conversationHistory = []) {
-  const fullUrl = `${API_BASE}/api/voice/crm/search-customer-by-query`;
-  console.log(`🌐 Making API request to: ${fullUrl}`);
-  
-  const res = await fetch(fullUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, conversationHistory }),
-  });
-  
-  if (!res.ok) {
-    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
-    const errorData = await res.json();
-    throw new Error(errorData.error || `Request failed: ${res.status}`);
-  }
-  
-  return res.json();
-}
-
-// --- Key Highlights API Functions ---
-
 export async function extractKeyHighlights(transcript, conversationHistory = []) {
   const fullUrl = `${API_BASE}/api/voice/crm/extract-key-highlights`;
   console.log(`🌐 Making API request to: ${fullUrl}`);
@@ -320,14 +299,15 @@ export async function extractKeyHighlights(transcript, conversationHistory = [])
   return res.json();
 }
 
-export async function storeKeyHighlights(email, highlights) {
-  const fullUrl = `${API_BASE}/api/voice/crm/store-key-highlights`;
+export async function saveKeyHighlightsToHubSpot(email, keyHighlights) {
+  const fullUrl = `${API_BASE}/api/voice/crm/save-key-highlights`;
   console.log(`🌐 Making API request to: ${fullUrl}`);
+  console.log(`💾 Saving key highlights for email: ${email}`, keyHighlights);
   
   const res = await fetch(fullUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, highlights }),
+    body: JSON.stringify({ email, keyHighlights }),
   });
   
   if (!res.ok) {
@@ -336,45 +316,12 @@ export async function storeKeyHighlights(email, highlights) {
     throw new Error(errorData.error || `Request failed: ${res.status}`);
   }
   
-  return res.json();
+  const result = await res.json();
+  console.log(`✅ Key highlights saved successfully:`, result);
+  return result;
 }
 
-export async function getKeyHighlights(email) {
-  const fullUrl = `${API_BASE}/api/voice/crm/get-key-highlights/${encodeURIComponent(email)}`;
-  console.log(`🌐 Making API request to: ${fullUrl}`);
-  
-  const res = await fetch(fullUrl, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  });
-  
-  if (!res.ok) {
-    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
-    const errorData = await res.json();
-    throw new Error(errorData.error || `Request failed: ${res.status}`);
-  }
-  
-  return res.json();
-}
 
-export async function extractAndStoreHighlights(transcript, email, conversationHistory = []) {
-  const fullUrl = `${API_BASE}/api/voice/crm/extract-and-store-highlights`;
-  console.log(`🌐 Making API request to: ${fullUrl}`);
-  
-  const res = await fetch(fullUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ transcript, email, conversationHistory }),
-  });
-  
-  if (!res.ok) {
-    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
-    const errorData = await res.json();
-    throw new Error(errorData.error || `Request failed: ${res.status}`);
-  }
-  
-  return res.json();
-}
 
 
 

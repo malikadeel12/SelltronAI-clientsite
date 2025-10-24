@@ -68,15 +68,6 @@ const CRMSidePanel = ({ isOpen, onClose, customerData, isLoading }) => {
                 </div>
               </div>
 
-              {/* Key Highlights */}
-              {customerData.highlights && (
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-green-900 mb-3">Key Highlights</h3>
-                  <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                    {customerData.highlights}
-                  </div>
-                </div>
-              )}
 
 
               {/* Last Updated */}
