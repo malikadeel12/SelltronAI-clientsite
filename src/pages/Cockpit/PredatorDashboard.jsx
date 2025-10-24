@@ -292,25 +292,17 @@ export default function PredatorDashboard() {
               setCrmSidebarVisible(true);
               customerFound = true;
               
-              // Merge HubSpot data with extracted data - prioritize extracted data (new info from conversation)
-              const mergedData = {
-                ...existingData,
-                ...extractedData,
-                // Prioritize extracted data (new info) over existing HubSpot data
-                name: extractedData.name || existingData.name,
-                email: extractedData.email || existingData.email,
-                phone: extractedData.phone || existingData.phone,
-                company: extractedData.company || existingData.company
-              };
-              setCustomerData(mergedData);
-              showToast("Customer data enhanced from HubSpot CRM");
-              console.log("✅ CRM: Customer data enhanced with HubSpot data:", mergedData);
+              // Only use HubSpot data - do not merge with extracted data
+              // This ensures CRM sidebar shows only HubSpot data as requested
+              setCustomerData(existingData);
+              showToast("Customer data loaded from HubSpot CRM");
+              console.log("✅ CRM: Customer data loaded from HubSpot:", existingData);
               
               // Update customer data in HubSpot with new information if any fields were updated
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
                   console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
-                  await updateCustomerData(mergedData);
+                  await updateCustomerData(existingCustomer);
                   showToast("Customer data updated in HubSpot CRM");
                   console.log("✅ CRM: Customer data updated in HubSpot successfully");
                 } catch (updateError) {
@@ -326,11 +318,8 @@ export default function PredatorDashboard() {
                 if (highlightsResult.success && highlightsResult.highlights) {
                   console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
                   
-                  // Update customer data with highlights silently
-                  setCustomerData(prevData => ({
-                    ...prevData,
-                    ...highlightsResult.highlights
-                  }));
+                  // Highlights are stored in HubSpot, no need to update local state
+                  // CRM sidebar will show only HubSpot data as requested
                   
                   // Only show toast if highlights were actually stored (meaningful data found)
                   showToast("Key highlights updated");
@@ -361,25 +350,17 @@ export default function PredatorDashboard() {
               customerFound = true;
               
               const existingCustomer = searchResult.customers[0];
-              // Merge HubSpot data with extracted data - prioritize extracted data (new info from conversation)
-              const mergedData = {
-                ...existingCustomer,
-                ...extractedData,
-                // Prioritize extracted data (new info) over existing HubSpot data
-                name: extractedData.name || existingCustomer.name,
-                email: extractedData.email || existingCustomer.email,
-                phone: extractedData.phone || existingCustomer.phone,
-                company: extractedData.company || existingCustomer.company
-              };
-              setCustomerData(mergedData);
-              showToast("Customer data enhanced from HubSpot CRM");
-              console.log("✅ CRM: Customer data enhanced with HubSpot data:", mergedData);
+              // Only use HubSpot data - do not merge with extracted data
+              // This ensures CRM sidebar shows only HubSpot data as requested
+              setCustomerData(existingCustomer);
+              showToast("Customer data loaded from HubSpot CRM");
+              console.log("✅ CRM: Customer data loaded from HubSpot:", existingCustomer);
               
               // Update customer data in HubSpot with new information if any fields were updated
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
                   console.log("🔄 CRM: Updating customer data in HubSpot with new information...");
-                  await updateCustomerData(mergedData);
+                  await updateCustomerData(existingCustomer);
                   showToast("Customer data updated in HubSpot CRM");
                   console.log("✅ CRM: Customer data updated in HubSpot successfully");
                 } catch (updateError) {
@@ -391,15 +372,12 @@ export default function PredatorDashboard() {
               // Extract and store key highlights from the conversation
               try {
                 console.log("🔍 CRM: Extracting key highlights from conversation...");
-                const highlightsResult = await extractAndStoreHighlights(transcript, mergedData.email, conversationHistory);
+                const highlightsResult = await extractAndStoreHighlights(transcript, existingCustomer.email, conversationHistory);
                 if (highlightsResult.success && highlightsResult.highlights) {
                   console.log("✅ CRM: Key highlights extracted and stored:", highlightsResult.highlights);
                   
-                  // Update customer data with highlights
-                  setCustomerData(prevData => ({
-                    ...prevData,
-                    ...highlightsResult.highlights
-                  }));
+                  // Highlights are stored in HubSpot, no need to update local state
+                  // CRM sidebar will show only HubSpot data as requested
                   
                   // Only show toast if highlights were actually stored
                   if (highlightsResult.stored) {
@@ -493,20 +471,14 @@ export default function PredatorDashboard() {
             setCustomerData(updatedData);
             showToast("Key highlights extracted and stored");
           } else {
-            // Fallback: update local state if HubSpot fetch fails
-            setCustomerData(prevData => ({
-              ...prevData,
-              ...highlightsResult.highlights
-            }));
+            // HubSpot fetch failed, but highlights were stored
+            // CRM sidebar will show only HubSpot data as requested
             showToast("Key highlights extracted and stored");
           }
         } catch (fetchError) {
           console.error("Error fetching updated customer data:", fetchError);
-          // Fallback: update local state
-          setCustomerData(prevData => ({
-            ...prevData,
-            ...highlightsResult.highlights
-          }));
+          // HubSpot fetch failed, but highlights were stored
+          // CRM sidebar will show only HubSpot data as requested
           showToast("Key highlights extracted and stored");
         }
       } else {
