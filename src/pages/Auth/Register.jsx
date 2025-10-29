@@ -537,9 +537,11 @@ export default function SignUp() {
             ? "http://localhost:7000" 
             : "";
         let who = { role: "user" };
+        // Always fetch a fresh token right before the request
+        const idToken = await getIdToken(cred.user, true);
         try {
           const res = await fetch(`${apiBase}/api/auth/whoami`, {
-            headers: { Authorization: `Bearer ${token.value || token}` },
+            headers: { Authorization: `Bearer ${idToken}` },
           });
           if (res.ok) who = await res.json();
         } catch (_) { }
@@ -547,11 +549,12 @@ export default function SignUp() {
         // Sync Google user to HubSpot (non-blocking)
         try {
           console.log("🔄 Syncing Google user to HubSpot...");
+          const freshTokenForHubspot = await getIdToken(cred.user, true);
           const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${token.value || token}`
+              "Authorization": `Bearer ${freshTokenForHubspot}`
             }
           });
           

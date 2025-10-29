@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { saveKeyHighlightsToHubSpot } from '../lib/api.js';
+import { saveKeyHighlightsToHubSpot, saveSentimentToHubSpot } from '../lib/api.js';
 
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -9,9 +9,10 @@ const openSansStyle = {
   fontFamily: "'Open Sans', sans-serif",
 };
 
-const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) => {
+const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, sentimentData = null }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [highlightsSaved, setHighlightsSaved] = useState(false);
+  const [sentimentSaved, setSentimentSaved] = useState(false);
 
   // Auto-save key highlights to HubSpot when they are displayed
   useEffect(() => {
@@ -46,9 +47,44 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) 
     saveHighlightsToHubSpot();
   }, [customerData?.email, keyHighlights, highlightsSaved, isLoading]);
 
-  // Reset highlights saved flag when customer changes
+  // Auto-save sentiment to HubSpot when it is displayed
+  useEffect(() => {
+    const saveSentimentToHubSpotFunc = async () => {
+      // Only save if:
+      // 1. We have customer data with email
+      // 2. We have sentiment data to save
+      // 3. We haven't already saved this sentiment
+      // 4. We're not currently loading
+      if (
+        customerData?.email && 
+        sentimentData && 
+        sentimentData.color && 
+        !sentimentSaved && 
+        !isLoading
+      ) {
+        try {
+          console.log('💾 CRM Sidebar: Auto-saving sentiment to HubSpot:', {
+            email: customerData.email,
+            sentimentData
+          });
+          
+          await saveSentimentToHubSpot(customerData.email, sentimentData);
+          setSentimentSaved(true);
+          console.log('✅ CRM Sidebar: Sentiment saved successfully to HubSpot');
+        } catch (error) {
+          console.error('❌ CRM Sidebar: Failed to save sentiment to HubSpot:', error);
+          // Don't set sentimentSaved to true on error, so we can retry
+        }
+      }
+    };
+
+    saveSentimentToHubSpotFunc();
+  }, [customerData?.email, sentimentData, sentimentSaved, isLoading]);
+
+  // Reset highlights and sentiment saved flags when customer changes
   useEffect(() => {
     setHighlightsSaved(false);
+    setSentimentSaved(false);
   }, [customerData?.email]);
   return (
     <>
@@ -174,6 +210,7 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) 
               </div>
             </div>
 
+
             {/* Key Highlights Section */}
             {Object.keys(keyHighlights).length > 0 && (
               <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
@@ -240,6 +277,54 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) 
               </div>
             )}
 
+            {/* Light Sentiment (Traffic Light System) - Shown after Key Highlights */}
+            {sentimentData && (
+              <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
+                <h4 className="font-medium text-[#000000] mb-3 flex items-center" style={orbitronStyle}>
+                  <svg className="w-5 h-5 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Light Sentiment
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#666666]" style={openSansStyle}>Current Mood:</span>
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className={`w-4 h-4 rounded-full border-2 ${
+                          sentimentData.color === 'green' ? 'bg-green-500 border-green-600' :
+                          sentimentData.color === 'red' ? 'bg-red-500 border-red-600' :
+                          'bg-yellow-500 border-yellow-600'
+                        }`}
+                      ></div>
+                      <span className="text-sm font-medium capitalize text-[#000000]" style={openSansStyle}>
+                        {sentimentData.sentiment}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs text-[#666666] mb-2 font-semibold" style={openSansStyle}>Traffic Light System:</div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full ${sentimentData.color === 'green' ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                      <div className={`w-4 h-4 rounded-full ${sentimentData.color === 'yellow' ? 'bg-yellow-500' : 'bg-gray-300'}`}></div>
+                      <div className={`w-4 h-4 rounded-full ${sentimentData.color === 'red' ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+                      <span className="text-xs text-[#666666] ml-2 font-medium" style={openSansStyle}>
+                        {sentimentData.color === 'green' ? 'Positive' : 
+                         sentimentData.color === 'red' ? 'Objection / Negative' : 
+                         'Neutral / Small Talk'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#666666]" style={openSansStyle}>Score:</span>
+                    <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>
+                      {sentimentData.score?.toFixed(2) || '0.00'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* HubSpot Data Indicator - Always show since all data comes from HubSpot */}
             <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-3">
               <div className="flex items-center space-x-2">
@@ -274,6 +359,44 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {} }) 
                           console.log('✅ Manual save successful');
                         } catch (error) {
                           console.error('❌ Manual save failed:', error);
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-[#FFD700] text-[#000000] rounded hover:bg-[#FFD700]/80 transition-colors"
+                      style={openSansStyle}
+                    >
+                      Save Now
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sentiment Save Status */}
+            {sentimentData && (
+              <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {sentimentSaved ? (
+                      <>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-green-600 font-medium" style={openSansStyle}>Sentiment saved to HubSpot</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-yellow-600 font-medium" style={openSansStyle}>Saving sentiment to HubSpot...</span>
+                      </>
+                    )}
+                  </div>
+                  {!sentimentSaved && customerData?.email && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await saveSentimentToHubSpot(customerData.email, sentimentData);
+                          setSentimentSaved(true);
+                          console.log('✅ Manual sentiment save successful');
+                        } catch (error) {
+                          console.error('❌ Manual sentiment save failed:', error);
                         }
                       }}
                       className="px-2 py-1 text-xs bg-[#FFD700] text-[#000000] rounded hover:bg-[#FFD700]/80 transition-colors"

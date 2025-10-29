@@ -50,6 +50,45 @@ export async function fetchVoiceConfig() {
   return res.json();
 }
 
+// Streaming STT for Live Transcription
+export async function runStreamingStt({ audioBlob, language, encoding, onTranscript }) {
+  console.log("🎤 API: Starting streaming STT...");
+  const form = new FormData();
+  if (audioBlob) form.append("audio", audioBlob, "audio.webm");
+  if (language) form.append("language", language);
+  if (encoding) form.append("encoding", encoding);
+  
+  try {
+    const response = await fetch(`${API_BASE}/api/voice/stt-stream`, {
+      method: "POST",
+      body: form,
+    });
+    
+    if (!response.ok) throw new Error(`Streaming failed: ${response.status}`);
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = JSON.parse(line.slice(6));
+          if (onTranscript) onTranscript(data);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("❌ Streaming STT error:", error);
+    throw error;
+  }
+}
+
 export async function runVoicePipeline({ audioBlob, mode, voice, language, encoding, hints, boost, sttModel, conversationHistory = [] }) {
   console.log("🌐 API: Starting voice pipeline call...");
   const form = new FormData();
@@ -80,26 +119,12 @@ export async function runVoicePipeline({ audioBlob, mode, voice, language, encod
   return result;
 }
 
-export async function runStt({ audioBlob, language, encoding, hints, boost, sttModel }) {
-  const form = new FormData();
-  if (audioBlob) form.append("audio", audioBlob, "audio.webm");
-  if (language) form.append("language", language);
-  if (encoding) form.append("encoding", encoding);
-  if (typeof hints !== 'undefined') {
-    if (Array.isArray(hints)) form.append("hints", JSON.stringify(hints));
-    else form.append("hints", String(hints));
-  }
-  if (typeof boost !== 'undefined') form.append("boost", String(boost));
-  if (typeof sttModel !== 'undefined') form.append("sttModel", sttModel);
-  return postForm(`/api/voice/stt`, form);
+export async function runGpt({ transcript, mode, conversationHistory = [], language = "en-US" }) {
+  return postJson(`/api/voice/gpt`, { transcript, mode, conversationHistory, language });
 }
 
-export async function runGpt({ transcript, mode, conversationHistory = [] }) {
-  return postJson(`/api/voice/gpt`, { transcript, mode, conversationHistory });
-}
-
-export async function runTts({ text, voice }) {
-  return postJson(`/api/voice/tts`, { text, voice });
+export async function runTts({ text, voice, language = "en-US" }) {
+  return postJson(`/api/voice/tts`, { text, voice, language });
 }
 
 // --- Email Verification APIs (No caching for auth operations) ---
@@ -318,6 +343,28 @@ export async function saveKeyHighlightsToHubSpot(email, keyHighlights) {
   
   const result = await res.json();
   console.log(`✅ Key highlights saved successfully:`, result);
+  return result;
+}
+
+export async function saveSentimentToHubSpot(email, sentimentData) {
+  const fullUrl = `${API_BASE}/api/voice/crm/save-sentiment`;
+  console.log(`🌐 Making API request to: ${fullUrl}`);
+  console.log(`💾 Saving sentiment for email: ${email}`, sentimentData);
+  
+  const res = await fetch(fullUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, sentimentData }),
+  });
+  
+  if (!res.ok) {
+    console.error(`❌ API request failed: ${res.status} ${res.statusText}`);
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  const result = await res.json();
+  console.log(`✅ Sentiment saved successfully:`, result);
   return result;
 }
 

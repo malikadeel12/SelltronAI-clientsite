@@ -9,7 +9,7 @@ import Confetti from "react-confetti";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "../../lib/firebase";
-import { fetchVoiceConfig, runStt, runGpt, runTts, runVoicePipeline, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, extractKeyHighlights } from "../../lib/api";
+import { fetchVoiceConfig, runGpt, runTts, runVoicePipeline, runStreamingStt, getCustomerData, updateCustomerData, extractCustomerInfo, searchCustomerByNameOrCompany, extractKeyHighlights } from "../../lib/api";
 import CRMSidebar from "../../components/CRMSidebar";
 
 // Font styles
@@ -32,7 +32,6 @@ export default function PredatorDashboard() {
   const [predatorAnswer, setPredatorAnswer] = useState("");
   const [askText, setAskText] = useState("");
   const [toast, setToast] = useState({ show: false, message: "" });
-  const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [mode, setMode] = useState("sales");
@@ -48,6 +47,7 @@ export default function PredatorDashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [micReactivated, setMicReactivated] = useState(false);
   const isTtsPlayingRef = useRef(false);
+  const isProcessingRef = useRef(false); // Track processing state to prevent interrupt
   const [isAskGptProcessing, setIsAskGptProcessing] = useState(false);
   const [predatorAnswerRefreshing, setPredatorAnswerRefreshing] = useState(false);
   const [coachingButtonsRefreshing, setCoachingButtonsRefreshing] = useState(false);
@@ -65,10 +65,16 @@ export default function PredatorDashboard() {
   const [keyHighlights, setKeyHighlights] = useState({});
   const [crmLoading, setCrmLoading] = useState(false);
   const [userSelectingResponse, setUserSelectingResponse] = useState(false);
-  const [lastProcessedTranscript, setLastProcessedTranscript] = useState("");
+  // Sentiment analysis state
+  const [sentimentData, setSentimentData] = useState(null);
+  
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
+  // Guards and synchronous dedupe refs
+  const sttRunningRef = useRef(false);
+  const lastProcessedTranscriptRef = useRef("");
+  const accumulatedTranscriptRef = useRef(""); // Track accumulated live transcript
   
   // Load conversation history from localStorage for both modes
   useEffect(() => {
@@ -107,12 +113,61 @@ export default function PredatorDashboard() {
     }
   }, [conversationHistory, predatorAnswer, liveTranscript]);
 
+  // Helper function to get sentiment emoji
+  const getSentimentEmoji = (sentimentData) => {
+    if (!sentimentData || !sentimentData.color) return '';
+    const color = sentimentData.color.toLowerCase();
+    if (color === 'green') return '🟢';
+    if (color === 'red') return '🔴';
+    if (color === 'yellow') return '🟡';
+    return '';
+  };
+
+  // Helper function to format live transcript with bold labels
+  const formatLiveTranscript = (text) => {
+    if (!text) return null;
+    
+    const lines = text.split('\n');
+    return lines.map((line, index) => {
+      // Check if line starts with "Customer:" or "Predator AI:"
+      if (line.startsWith('Customer:')) {
+        const parts = line.split('Customer:');
+        if (parts.length > 1) {
+          return (
+            <div key={index} className="mb-2">
+              <span className="font-bold">Customer:</span>
+              <span>{parts[1]}</span>
+            </div>
+          );
+        }
+      } else if (line.startsWith('Predator AI:')) {
+        const parts = line.split('Predator AI:');
+        if (parts.length > 1) {
+          return (
+            <div key={index} className="mb-2">
+              <span className="font-bold">Predator AI:</span>
+              <span>{parts[1]}</span>
+            </div>
+          );
+        }
+      }
+      
+      // Regular line (empty line or other content)
+      if (line.trim() === '') {
+        return <div key={index} className="mb-2"></div>;
+      }
+      
+      return <div key={index} className="mb-2">{line}</div>;
+    });
+  };
+
   // Function to rebuild live transcript from conversation history
   const rebuildLiveTranscript = (history) => {
     if (history.length > 0) {
-      const allConversations = history.map(entry => 
-        `Customer: ${entry.userInput}\n\nPredator AI: ${entry.predatorResponse}`
-      ).join('\n\n');
+      const allConversations = history.map(entry => {
+        const sentimentEmoji = getSentimentEmoji(entry.sentimentData);
+        return `Customer: ${entry.userInput}${sentimentEmoji ? ' ' + sentimentEmoji : ''}\n\nPredator AI: ${entry.predatorResponse}`;
+      }).join('\n\n');
       setLiveTranscript(allConversations);
     } else {
       setLiveTranscript("");
@@ -139,16 +194,18 @@ export default function PredatorDashboard() {
   };
 
   // Function to rebuild live transcript with current live query
-  const rebuildLiveTranscriptWithQuery = (history, currentQuery) => {
+  const rebuildLiveTranscriptWithQuery = (history, currentQuery, currentSentiment = null) => {
     console.log("🔄 Rebuilding live transcript with query:", currentQuery);
     
     if (history.length > 0) {
-      const allConversations = history.map(entry => 
-        `Customer: ${entry.userInput}\n\nPredator AI: ${entry.predatorResponse}`
-      ).join('\n\n');
+      const allConversations = history.map(entry => {
+        const sentimentEmoji = getSentimentEmoji(entry.sentimentData);
+        return `Customer: ${entry.userInput}${sentimentEmoji ? ' ' + sentimentEmoji : ''}\n\nPredator AI: ${entry.predatorResponse}`;
+      }).join('\n\n');
       
       if (currentQuery && currentQuery.trim()) {
-        const fullTranscript = `${allConversations}\n\nCustomer: ${currentQuery}`;
+        const currentSentimentEmoji = getSentimentEmoji(currentSentiment);
+        const fullTranscript = `${allConversations}\n\nCustomer: ${currentQuery}${currentSentimentEmoji ? ' ' + currentSentimentEmoji : ''}`;
         console.log("📝 Setting live transcript with history + current query");
         setLiveTranscript(fullTranscript);
       } else {
@@ -157,7 +214,8 @@ export default function PredatorDashboard() {
       }
     } else {
       if (currentQuery && currentQuery.trim()) {
-        const fullTranscript = `Customer: ${currentQuery}`;
+        const currentSentimentEmoji = getSentimentEmoji(currentSentiment);
+        const fullTranscript = `Customer: ${currentQuery}${currentSentimentEmoji ? ' ' + currentSentimentEmoji : ''}`;
         console.log("📝 Setting live transcript with current query only");
         setLiveTranscript(fullTranscript);
       } else {
@@ -173,7 +231,7 @@ export default function PredatorDashboard() {
   };
 
   // Function to add conversation entry (both modes)
-  const addConversationEntry = (userInput, predatorResponse, suggestions = []) => {
+  const addConversationEntry = (userInput, predatorResponse, suggestions = [], sentiment = null) => {
     // Get Response A (default response)
     const responseA = suggestions.find(s => s.responseType === 'A')?.text || suggestions[0]?.text || '';
     const cleanResponseA = responseA.replace(/^[ABC]:\s*/, '');
@@ -183,7 +241,8 @@ export default function PredatorDashboard() {
       timestamp: new Date().toLocaleTimeString(),
       userInput: userInput.trim(),
       predatorResponse: cleanResponseA.trim(),
-      mode: mode // Current mode (sales or support)
+      mode: mode, // Current mode (sales or support)
+      sentimentData: sentiment || null // Store sentiment with each entry
     };
     setConversationHistory(prev => {
       const updated = [...prev, newEntry];
@@ -211,12 +270,18 @@ export default function PredatorDashboard() {
     'customer support', 'technical issue', 'refund', 'upgrade', 'downgrade',
     // Common names/terms
     'Adeel', 'email', 'phone number', 'order number',
+    // Email and contact info recognition
+    'gmail.com', 'email', 'at gmail', 'gmail', 'gmail dot com',
+    '@gmail.com', 'gmail.com', 'my email is', 'my name is', 'my phone is',
+    // Numbers for better recognition
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    // Common phrases that help with recognition
+    'innocent', 'boy', 'name', 'email address', 'contact', 'phone',
   ]), []);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const mimeTypeRef = useRef('audio/webm;codecs=opus');
   const encodingRef = useRef('WEBM_OPUS');
-  const recognitionRef = useRef(null);
   const processingTimeoutRef = useRef(null);
   const lastProcessedTextRef = useRef("");
   const currentAudioRef = useRef(null);
@@ -225,16 +290,26 @@ export default function PredatorDashboard() {
   const lastGptResponseTimeRef = useRef(0);
   const conversationBoxRef = useRef(null);
   const heartbeatTimerRef = useRef(null);
+  const googleSttIntervalRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
   
-  // Stop any active microphone inputs (live recognition or manual recording)
+  // Stop any active microphone inputs (Google STT or manual recording)
   const stopAllInput = () => {
-    // Stop real-time recognition if running
-    if (recognitionRef.current) {
-      try { 
-        recognitionRef.current.stop(); 
-        console.log("🔇 Stopped real-time recognition to prevent AI voice transcription");
-      } catch (_) {}
-      recognitionRef.current = null; // Set to null immediately to prevent processing
+    // Stop Google STT interval if running
+    if (googleSttIntervalRef.current) {
+      clearInterval(googleSttIntervalRef.current);
+      googleSttIntervalRef.current = null;
+      console.log("🔇 Stopped Google STT interval to prevent AI voice transcription");
+    }
+    // Stop Web Speech API if running
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+        speechRecognitionRef.current = null;
+        console.log("🔇 Stopped Web Speech API");
+      } catch (e) {
+        console.log("⚠️ Error stopping Web Speech API:", e.message);
+      }
     }
     // Stop MediaRecorder recording if active
     const rec = mediaRecorderRef.current;
@@ -247,7 +322,7 @@ export default function PredatorDashboard() {
       heartbeatTimerRef.current = null;
     }
     // DON'T set streaming to false - keep mic always on
-    setRecording(false);
+    // Note: recording state not defined in this component
     // Don't set isVoiceActive to false - keep mic ready for next input
   };
 
@@ -258,12 +333,13 @@ export default function PredatorDashboard() {
 
   // CRM Functions
   const processCustomerInfo = async (transcript) => {
-    if (!transcript || transcript.trim() === lastProcessedTranscript) {
+    const t = (transcript || "").trim();
+    if (!t || t === lastProcessedTranscriptRef.current) {
       return; // Skip if same transcript or empty
     }
     
-    console.log("🔍 CRM: Processing customer info for transcript:", transcript);
-    setLastProcessedTranscript(transcript);
+    console.log("🔍 CRM: Processing customer info for transcript:", t);
+    lastProcessedTranscriptRef.current = t;
     
     try {
       // First, try to extract specific customer information from the conversation
@@ -393,17 +469,12 @@ export default function PredatorDashboard() {
     }
   };
 
-  const toggleCrmSidebar = () => {
-    setCrmSidebarVisible(!crmSidebarVisible);
-  };
+  
 
 
   // Function to stop all audio playback and mute microphone during AI speech
   const stopAllAudio = () => {
     console.log("🔇 Stopping all audio playback");
-    
-    // Stop speech synthesis immediately
-    window.speechSynthesis.cancel();
     
     // Stop any playing audio immediately
     if (currentAudioRef.current) {
@@ -413,13 +484,13 @@ export default function PredatorDashboard() {
     }
     
     // Mute microphone during AI speech to prevent feedback loop
-    if (recognitionRef.current) {
+    if (googleSttIntervalRef.current) {
       try {
-        recognitionRef.current.stop();
-        recognitionRef.current = null; // Set to null immediately to prevent processing
-        console.log("🔇 Microphone muted during AI speech");
+        clearInterval(googleSttIntervalRef.current);
+        googleSttIntervalRef.current = null;
+        console.log("🔇 Google STT interval stopped during AI speech");
       } catch (e) {
-        console.log("🔇 Microphone already stopped");
+        console.log("🔇 Google STT interval already stopped");
       }
     }
     
@@ -445,7 +516,7 @@ export default function PredatorDashboard() {
           console.log("🎤 All conditions met - restarting microphone");
           // Ensure streaming ref is set to true before starting recognition
           streamingRef.current = true;
-          startRealTimeRecognition();
+          startGoogleSttRecognition();
           showToast("🎤 Mic is ready - speak your next query!");
         } else {
           console.log("🔇 Audio still playing or mic was stopped - not restarting microphone");
@@ -584,283 +655,7 @@ export default function PredatorDashboard() {
     };
   }, []);
 
-  const startRecording = async () => {
-    try {
-      console.log("🎤 Requesting microphone access...");
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 48000
-        } 
-      });
-      console.log("🎤 Microphone access granted, stream:", stream);
-      
-      // Choose a MIME type supported by the current browser (mobile-friendly)
-      let mimeType = '';
-      if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-          mimeType = 'audio/ogg;codecs=opus';
-          encodingRef.current = 'OGG_OPUS';
-        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-          encodingRef.current = 'WEBM_OPUS';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-          encodingRef.current = 'WEBM_OPUS';
-        } else {
-          // As a last resort, allow browser to pick default; STT may not support some codecs
-          mimeType = '';
-          encodingRef.current = 'WEBM_OPUS';
-        }
-      }
-      mimeTypeRef.current = mimeType || 'audio/webm';
-      console.log("🎤 Using MIME type:", mimeTypeRef.current, " Encoding:", encodingRef.current);
-      
-      const mediaRecorder = new MediaRecorder(stream, mimeTypeRef.current ? { mimeType: mimeTypeRef.current } : undefined);
-      recordedChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        console.log("🎤 Audio data available:", e.data.size, "bytes");
-        if (e.data && e.data.size > 0) {
-          recordedChunksRef.current.push(e.data);
-          console.log("🎤 Chunks recorded:", recordedChunksRef.current.length);
-        }
-      };
-      
-      mediaRecorder.onstart = () => {
-        console.log("🎤 MediaRecorder started");
-        setRecording(true);
-        setIsVoiceActive(true);
-      };
-      
-      mediaRecorder.onstop = () => {
-        console.log("🎤 MediaRecorder stopped");
-        setRecording(false);
-        // Don't set isVoiceActive to false - keep mic ready for next input
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-
-        // When recording stops, run the full voice pipeline (STT -> GPT -> optional TTS)
-        (async () => {
-          try {
-            if (!recordedChunksRef.current.length) return;
-            const blob = new Blob(recordedChunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
-            const speedTimer = startSpeedTimer();
-            const { transcript: t, keyHighlights } = await runVoicePipeline({
-              audioBlob: blob,
-              mode,
-              voice: aiVoiceSelection, // Use selected AI voice
-              language: language === "German" ? "de-DE" : "en-US",
-              encoding: encodingRef.current,
-              hints: defaultHints,
-              boost: sttBoost,
-              sttModel,
-              conversationHistory
-            });
-            
-            if (t && t.trim()) {
-              // Update key highlights if available
-              if (keyHighlights && Object.keys(keyHighlights).length > 0) {
-                setKeyHighlights(keyHighlights);
-                console.log("🔍 Updated key highlights:", keyHighlights);
-              }
-              
-              // Get responses from GPT based on current mode
-              const currentMode = modeRef.current; // Use ref for immediate value
-              const prompt = currentMode === "sales" 
-                ? `Customer said: "${t}". 
-
-SALES MODE INSTRUCTIONS:
-- Always professional, confident, and helpful
-- Short and clear answers (max 2-3 sentences)
-- Never sound unsure or negative
-- Focus on benefits, value, and closing
-- Handle objections directly (price, competition, timing)
-- Always give 3 different responses
-- Small Talk: Keep it polite and short (e.g., "I'm doing well, thanks for asking."). Then quickly guide the conversation back to the sales topic.
-
-Generate 3 different persuasive sales responses that help close deals, address objections, and build value. Each response should be professional, confident, and focused on benefits and closing:`
-                : `Customer said: "${t}". 
-
-SUPPORT MODE INSTRUCTIONS:
-- Empathetic, problem-solving tone
-- Give clear instructions or next steps
-- Keep it simple and easy to understand
-- Always give 1 response only
-
-Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
-              
-              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode, conversationHistory });
-              
-              if (responseText) {
-                // Parse response based on current mode
-                let suggestions = [];
-                
-                if (currentMode === "sales") {
-                  // For sales mode, check if we have multiple questions format
-                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse multiple questions format and group responses by type (A, B, C)
-                    const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
-                    
-                    // Group responses by type across all questions
-                    const responsesByType = { A: [], B: [], C: [] };
-                    
-                    questionBlocks.forEach((block, blockIndex) => {
-                      const lines = block.split('\n').filter(line => line.trim());
-                      
-                      lines.forEach((line, lineIndex) => {
-                        if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
-                          const text = line.replace(/^Response [ABC]:\s*/, '').trim();
-                          if (text) {
-                            const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
-                            responsesByType[responseType].push({
-                              responseText: text
-                            });
-                          }
-                        }
-                      });
-                    });
-                    
-                    // Create combined suggestions grouped by response type
-                    suggestions = [];
-                    ['A', 'B', 'C'].forEach(type => {
-                      if (responsesByType[type].length > 0) {
-                        // Combine all responses of this type (only answers, no questions)
-                        const combinedText = responsesByType[type]
-                          .map((item, index) => item.responseText)
-                          .join('\n\n');
-                        
-                        suggestions.push({
-                          id: suggestions.length + 1,
-                          text: combinedText,
-                          timestamp: Date.now(),
-                          responseType: type,
-                          isCombinedResponse: true
-                        });
-                      }
-                    });
-                    console.log(`🎯 Parsed ${suggestions.length} combined responses from ${questionBlocks.length} questions for sales mode`);
-                  } else if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse single question database responses
-                    const responseLines = responseText.split('\n').filter(line => line.trim());
-                    suggestions = responseLines.map((line, index) => {
-                      const text = line.replace(/^Response [ABC]:\s*/, '').trim();
-                      const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
-                      return {
-                        id: index + 1,
-                        text: text,
-                        timestamp: Date.now(),
-                        responseType: responseType
-                      };
-                    });
-                    console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
-                  } else {
-                    // Fallback to original parsing for non-database responses
-                    const lines = responseText.split('\n').filter(line => line.trim());
-                    suggestions = lines.slice(0, 3).map((suggestion, index) => ({
-                      id: index + 1,
-                      text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                      timestamp: Date.now(),
-                      responseType: String.fromCharCode(65 + index) // A, B, C
-                    }));
-                    console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
-                  }
-                } else {
-                  // Support mode - single response
-                  suggestions = [{
-                    id: 1,
-                    text: responseText.trim(),
-                    timestamp: Date.now()
-                  }];
-                  console.log(`🎯 Generated 1 response for support mode`);
-                }
-                
-                console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
-                
-                if (suggestions.length > 0) {
-                  setCoachingSuggestions(suggestions);
-                  // Keep live transcript showing Response A (default response)
-                  setShowLiveTranscript(true);
-                  // Hide buttons when new response arrives
-                  setShowCoachingButtons(false);
-                  // Trigger button animation for new responses
-                  setCoachingButtonsRefreshing(true);
-                  setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
-                  // Show buttons after 3 seconds
-                  setTimeout(() => setShowCoachingButtons(true), 3000);
-                  // Set first actual response (not question header) as the main answer and auto-play it
-                  // For auto-play, only use Response A specifically, not B or C
-                  const firstResponse = suggestions.find(s => !s.isQuestionHeader && !s.isCombinedResponse && s.responseType === 'A');
-                  let firstAnswer = firstResponse ? firstResponse.text : suggestions.find(s => s.responseType === 'A')?.text || suggestions[0].text;
-                  
-                  // If we still have a combined response, take only the first part before any double newlines
-                  if (firstAnswer && firstAnswer.includes('\n\n')) {
-                    firstAnswer = firstAnswer.split('\n\n')[0];
-                  }
-                  
-                  // Only set Response A in Predator Answer box
-                  const responseA = suggestions.find(s => s.responseType === 'A');
-                  const predatorAnswerText = responseA ? responseA.text : "Response A not found";
-                  console.log("🎯 Response A found:", responseA);
-                  console.log("🎯 Predator Answer Text:", predatorAnswerText);
-                  setPredatorAnswer(predatorAnswerText);
-                  
-                  // Live transcript will be updated by addConversationEntry function
-                  
-                  triggerRefreshAnimation();                  
-                  // Add to conversation history for pipeline path
-                  addConversationEntry(t, firstAnswer, suggestions);
-                  
-                  // Process customer information for CRM
-                  processCustomerInfo(t);
-                  
-                  
-                  // Auto-play logic removed from recording pipeline - handled in live recognition pipeline
-                }
-              }
-            }
-            endSpeedTimer(speedTimer);
-          } catch (e) {
-            console.error("Voice pipeline failed:", e);
-            showToast("Voice pipeline failed");
-          } finally {
-            recordedChunksRef.current = [];
-          }
-        })();
-      };
-      
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(100); // Collect data every 100ms
-      showToast("Recording started");
-    } catch (e) {
-      console.error("❌ Microphone error:", e);
-      showToast("Mic permission denied");
-    }
-  };
-
-  const stopRecording = () => {
-    const rec = mediaRecorderRef.current;
-    if (rec && rec.state !== "inactive") {
-      console.log("🛑 Stopping MediaRecorder...");
-      rec.stop();
-      // Don't set isVoiceActive to false - keep mic ready
-      setRecording(false);
-      // Stream tracks are already stopped in onstop event
-    }
-  };
-
-  // removed unused handleStart/handleStop to keep code minimal
-
-  const handleRecording = async () => {
-    if (recording) {
-      stopRecording();
-    } else {
-      await startRecording();
-    }
-  };
-
-
+  // Legacy recording functions removed - Current flow uses Google STT (startGoogleSttRecognition)
 
   const handleSubmitAsk = async () => {
     if (!askText.trim()) return;
@@ -874,7 +669,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
     setIsAskGptProcessing(true);
     const speedTimer = startSpeedTimer();
     try {
-      const { responseText } = await runGpt({ transcript: askText, mode, conversationHistory });
+      const { responseText } = await runGpt({ transcript: askText, mode, conversationHistory, language: language === "German" ? "de-DE" : "en-US" });
       setPredatorAnswer(responseText);
       
       // Ensure we show conversation history view (not live transcript) when response arrives
@@ -939,70 +734,90 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
 
 
-  // Helper function to handle TTS consistently
-  const speakText = (text) => {
+  // Helper function to handle TTS consistently - Google Cloud TTS only
+  // Note: This is only used for manual/coaching button TTS, not for auto-response
+  const speakText = async (text) => {
     if (!speechActive || !text) return;
     
-    console.log("🔇 Starting TTS - stopping all input to prevent AI voice transcription");
+    console.log("🔇 Starting Google Cloud TTS - stopping all input to prevent AI voice transcription");
     // Stop mic input so we don't capture our own TTS
     stopAllInput();
     // Stop any currently playing audio/speech to avoid overlap
     stopAllAudio();
     
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1;
-    utter.pitch = 1;
-    
-    // Track active state properly
-    utter.onstart = () => {
-      console.log("🔊 Browser TTS started playing");
-      setIsTtsPlaying(true);
-    };
-    utter.onend = () => { 
-      console.log("🔊 Browser TTS ended, streaming:", streaming);
+    try {
+      const ttsResult = await runTts({ text, voice: aiVoiceSelection, language: language === "German" ? "de-DE" : "en-US" });
+      if (ttsResult.audioUrl) {
+        const audio = new Audio(ttsResult.audioUrl);
+        currentAudioRef.current = audio;
+        
+        setIsTtsPlaying(true);
+        isTtsPlayingRef.current = true;
+        
+        audio.onplay = () => {
+          console.log("🔊 Google Cloud TTS started playing");
+          setIsTtsPlaying(true);
+          isTtsPlayingRef.current = true;
+        };
+        audio.onended = () => { 
+          console.log("🔊 Google Cloud TTS ended, streaming:", streaming);
+          setIsTtsPlaying(false);
+          isTtsPlayingRef.current = false;
+          currentAudioRef.current = null;
+          // Restart microphone after AI speech ends
+          restartMicrophone();
+          setMicReactivated(true);
+          setTimeout(() => setMicReactivated(false), 2000);
+        };
+        audio.onerror = () => {
+          console.log("🔊 Google Cloud TTS error occurred");
+          setIsTtsPlaying(false);
+          isTtsPlayingRef.current = false;
+          currentAudioRef.current = null;
+          // Restart microphone after TTS error
+          restartMicrophone();
+        };
+        
+        audio.play().catch(e => {
+          console.error("Google Cloud TTS audio playback failed:", e);
+          setIsTtsPlaying(false);
+          isTtsPlayingRef.current = false;
+          currentAudioRef.current = null;
+          restartMicrophone();
+        });
+      } else {
+        console.error("Google Cloud TTS failed - no audio URL returned");
+        setIsTtsPlaying(false);
+        isTtsPlayingRef.current = false;
+        restartMicrophone();
+      }
+    } catch (error) {
+      console.error("Google Cloud TTS failed:", error);
       setIsTtsPlaying(false);
-      // Restart microphone after AI speech ends
+      isTtsPlayingRef.current = false;
       restartMicrophone();
-      setMicReactivated(true);
-      setTimeout(() => setMicReactivated(false), 2000);
-    };
-    utter.onerror = () => {
-      console.log("🔊 Browser TTS error occurred");
-      setIsTtsPlaying(false);
-      // Restart microphone after TTS error
-      restartMicrophone();
-    };
-    
-    window.speechSynthesis.speak(utter);
+    }
   };
 
-  // Real-time speech recognition setup
-  const startRealTimeRecognition = () => {
-    console.log("🎤 Starting real-time recognition...");
-    console.log("🎤 Browser support check:", {
-      webkitSpeechRecognition: 'webkitSpeechRecognition' in window,
-      SpeechRecognition: 'SpeechRecognition' in window
-    });
+  // Google STT speech recognition setup
+  const startGoogleSttRecognition = () => {
+    console.log("🎤 Starting Google STT recognition...");
     
     // Reset manual stop flag when explicitly starting recognition
     manuallyStoppedRef.current = false;
     console.log("🎤 Reset manuallyStoppedRef to false - allowing restart");
     
-    // Check if already running - but allow restart if recognition ended
-    if (recognitionRef.current && streamingRef.current) {
-      console.log("🎤 Recognition already running - skipping start");
+    // Prevent duplicate starts if STT loop is already running
+    if (sttRunningRef.current) {
+      console.log("🎤 STT already running - skipping start");
       return;
     }
     
     // First, stop any existing recognition to prevent conflicts
-    if (recognitionRef.current) {
-      console.log("🛑 Stopping existing recognition before starting new one");
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        console.log("🛑 Error stopping existing recognition:", e);
-      }
-      recognitionRef.current = null;
+    if (googleSttIntervalRef.current) {
+      console.log("🛑 Stopping existing Google STT before starting new one");
+      clearInterval(googleSttIntervalRef.current);
+      googleSttIntervalRef.current = null;
     }
     
     // Clear any existing heartbeat timer
@@ -1011,498 +826,570 @@ Generate 1 empathetic support response that solves problems, shows understanding
       heartbeatTimerRef.current = null;
     }
     
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      console.log("🎤 Creating recognition instance...");
-      const recognition = new SpeechRecognition();
-      
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = language === "German" ? "de-DE" : "en-US";
-      recognition.maxAlternatives = 1;
-      
-      // Add serviceURI for better recognition (if supported)
-      if ('serviceURI' in recognition) {
-        recognition.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+    // Start Google STT recognition
+    setStreaming(true);
+    streamingRef.current = true;
+    manuallyStoppedRef.current = false;
+    setIsVoiceActive(true);
+    
+    // Start heartbeat mechanism to ensure continuous listening
+    heartbeatTimerRef.current = setInterval(() => {
+      if (!manuallyStoppedRef.current && streamingRef.current) {
+        // Only restart if STT loop is NOT running
+        if (!sttRunningRef.current) {
+          console.log("🔄 Heartbeat detected inactive Google STT - restarting");
+          startGoogleSttRecognition();
+        }
       }
-      
-      recognition.onstart = () => {
-        console.log("🎤 Real-time speech recognition started - MIC IS NOW LISTENING");
-        console.log("🎤 Recognition instance:", recognition);
-        console.log("🎤 Recognition settings:", {
-          continuous: recognition.continuous,
-          interimResults: recognition.interimResults,
-          lang: recognition.lang,
-          maxAlternatives: recognition.maxAlternatives
-        });
-        setStreaming(true);
-        streamingRef.current = true; // Also set ref for immediate access
-        manuallyStoppedRef.current = false; // Reset manual stop flag when starting
-        setIsVoiceActive(true); // Mic is listening
-        
-        // Start heartbeat mechanism to ensure continuous listening
-        heartbeatTimerRef.current = setInterval(() => {
-          if (!manuallyStoppedRef.current && streamingRef.current) {
-            // Check if recognition is still active
-            if (!recognitionRef.current || recognitionRef.current.state === 'inactive') {
-              console.log("🔄 Heartbeat detected inactive recognition - restarting immediately");
-              startRealTimeRecognition();
-            }
-          }
-        }, 1000); // Check every 1 second
-        
-        // Only stop audio if TTS is not actively playing - allow TTS to continue
-        console.log("🔇 Checking TTS state:", isTtsPlaying, "TTS ref:", isTtsPlayingRef.current, "Current audio:", currentAudioRef.current);
-        if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
-          console.log("🔇 No TTS playing - mic is ready for new input");
-        } else {
-          console.log("🔇 TTS is playing - mic will listen but won't interrupt until user speaks");
-        }
-        // Don't clear response here - let it stay visible until user speaks
-        setTranscript("");
-        
-        showToast("🎤 Mic is listening - speak anytime! (Response stays visible until you speak)");
-        console.log("✅ Mic state: isVoiceActive = true, streaming = true");
-        console.log("🔄 Recognition instance:", recognition);
-      };
-      
-      recognition.onresult = (event) => {
-        console.log("🎤 STT onresult called - event:", event);
-        console.log("🎤 Results length:", event.results.length);
-        console.log("🎤 Current states:", {
-          isTtsPlaying,
-          isTtsPlayingRef: isTtsPlayingRef.current,
-          currentAudio: !!currentAudioRef.current,
-          recognition: !!recognitionRef.current,
-          streaming
+    }, 1000); // Check every 1 second
+    
+    console.log("🔇 Checking TTS state:", isTtsPlaying, "TTS ref:", isTtsPlayingRef.current, "Current audio:", currentAudioRef.current);
+    if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
+      console.log("🔇 No TTS playing - mic is ready for new input");
+    } else {
+      console.log("🔇 TTS is playing - mic will listen but won't interrupt until user speaks");
+    }
+    
+    setTranscript("");
+    showToast("🎤 Google STT is listening - speak anytime! (Response stays visible until you speak)");
+    console.log("✅ Mic state: isVoiceActive = true, streaming = true");
+    
+    // Start continuous Google STT processing
+    startContinuousGoogleStt();
+  };
+
+  // Continuous Google STT processing
+  const startContinuousGoogleStt = async () => {
+    if (sttRunningRef.current) {
+      return;
+    }
+    sttRunningRef.current = true;
+    console.log("🎤 Starting continuous Google STT processing...");
+    
+    // Record audio continuously and process with Google STT
+    const recordAndProcess = async () => {
+      try {
+        // Get microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 48000
+          } 
         });
         
-        // Don't process speech input if AI is currently speaking
-        if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
-          console.log("🔇 AI is speaking - ignoring ALL input to prevent AI voice transcription");
-          return;
-        }
-        
-        // Additional check: ignore any results during AI speech to prevent AI voice transcription
-        if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          console.log("🔇 Browser TTS is speaking - ignoring input to prevent AI voice transcription");
-          return;
-        }
-        
-        // Additional check: if recognition was stopped, don't process results
-        if (!recognitionRef.current) {
-          console.log("🔇 Recognition was stopped - ignoring results");
-          return;
-        }
-        
-        // Additional check: if streaming is false, don't process results
-        // Use ref for immediate access to avoid timing issues
-        if (!streamingRef.current) {
-          console.log("🔇 Streaming ref is false - ignoring results");
-          return;
-        }
-        
-        console.log("🎤 Speech detected - processing input");
-        
-        let interimTranscript = '';
-        let finalTranscript = '';
-        
-        // Switch to live transcript view when user starts speaking (don't clear existing content)
-        if (event.resultIndex === 0) {
-          setShowLiveTranscript(true);
-        }
-        
-        // Clear predator answer as soon as user starts speaking and show processing
-        if (event.resultIndex === 0 && predatorAnswer) {
-          setPredatorAnswer("");
-          // Keep coaching suggestions visible - don't clear them
-          setResponseSpeed(null);
-          setIsProcessingFast(true);
-          // Clear current user input when new speech starts
-          setCurrentUserInput("");
-        }
-        
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript + ' ';
+        // Choose MIME type
+        let mimeType = '';
+        if (typeof MediaRecorder !== 'undefined') {
+          if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+            mimeType = 'audio/ogg;codecs=opus';
+            encodingRef.current = 'OGG_OPUS';
+          } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            mimeType = 'audio/webm;codecs=opus';
+            encodingRef.current = 'WEBM_OPUS';
+          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+            mimeType = 'audio/webm';
+            encodingRef.current = 'WEBM_OPUS';
           } else {
-            interimTranscript += result[0].transcript;
+            mimeType = '';
+            encodingRef.current = 'WEBM_OPUS';
           }
         }
+        mimeTypeRef.current = mimeType || 'audio/webm';
         
-        // Update current user input for display (separate from live transcript)
-        if (finalTranscript) {
-          setCurrentUserInput(finalTranscript.trim());
-        } else if (interimTranscript) {
-          setCurrentUserInput(interimTranscript);
-        }
+        const mediaRecorder = new MediaRecorder(stream, mimeTypeRef.current ? { mimeType: mimeTypeRef.current } : undefined);
+        const recordedChunks = [];
+        let processedSpeech = false; // Track if speech was actually processed
+        let isProcessingInOnstop = false; // Prevent duplicate onstop processing
+        let streamingInProgress = false; // Track streaming state
         
-        // Auto-scroll whenever there's any speech activity
-        if (finalTranscript || interimTranscript) {
-          setTimeout(() => {
-            const box = conversationBoxRef.current;
-            if (box) {
-              box.scrollTop = box.scrollHeight;
+        mediaRecorder.ondataavailable = async (e) => {
+          if (e.data && e.data.size > 0) {
+            recordedChunks.push(e.data);
+            // Note: Individual chunks are too fragmented for STT
+            // We'll show transcript only after complete recording
+          }
+        };
+        
+        mediaRecorder.onstop = async () => {
+          // Prevent duplicate onstop calls - MediaRecorder can fire onstop multiple times
+          if (isProcessingInOnstop || processedSpeech) {
+            console.log("⚠️ onstop already processing or processed, skipping duplicate:", { isProcessingInOnstop, processedSpeech });
+            return;
+          }
+          
+          isProcessingInOnstop = true; // Mark as processing
+          
+          try {
+            // Prevent duplicate processing - if already processed, skip
+            if (processedSpeech) {
+              console.log("⚠️ Audio already processed, skipping duplicate processing");
+              isProcessingInOnstop = false;
+              return;
             }
-          }, 50);
-        }
-        
-        // Update live transcript to show history + current live query
-        if (finalTranscript || interimTranscript) {
-          // If TTS is playing and user is speaking, stop TTS immediately
-          if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
-            console.log("🔇 User is speaking - stopping current TTS response");
-            stopAllAudio();
-          }
-          
-          // Use only new speech content, don't append to old transcript
-          setTranscript(finalTranscript);
-          
-          // Show history + current live query
-          const currentQuery = finalTranscript + interimTranscript;
-          console.log("🎤 Current query being processed:", currentQuery);
-          console.log("📚 Conversation history length:", conversationHistory.length);
-          
-          if (currentQuery.trim()) {
-            rebuildLiveTranscriptWithQuery(conversationHistory, currentQuery);
             
-            // Force auto-scroll to bottom immediately
-            setTimeout(() => {
-              const box = conversationBoxRef.current;
-              if (box) {
-                box.scrollTop = box.scrollHeight;
-                console.log("🔄 Auto-scrolling to bottom for live query");
+            // Only process if we actually detected speech and have audio chunks
+            if (!speechDetected) {
+              console.log("⚠️ No speech detected - skipping processing");
+              processedSpeech = true; // Mark as processed to allow next iteration
+              return;
+            }
+            
+            if (recordedChunks.length > 0) {
+              const blob = new Blob(recordedChunks, { type: mimeTypeRef.current || 'audio/webm' });
+              
+              // Skip if blob size is too small (likely empty or noise)
+              if (blob.size < 1000) {
+                console.log("⚠️ Audio too small, likely no speech - skipping:", blob.size);
+                processedSpeech = true;
+                return;
               }
-            }, 100);
-          }
-          
-          // Debounce silence: after ~2s of no more finals, call GPT and update answer
-          // Reduced from 3s to 2s for better responsiveness while still handling pauses
-          if (silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
-          }
-          const captured = finalTranscript.trim();
-          const speedTimer = startSpeedTimer();
-          silenceTimeoutRef.current = setTimeout(async () => {
-            try {
-              setIsProcessing(true);
-              // Stop any playing audio before processing new response
-              stopAllAudio();
               
-              // Keep existing live transcript content during processing
-              // Don't clear it, just keep what's already there
-              setCurrentUserInput("");
+              // Don't process speech input if AI is currently speaking
+              if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
+                console.log("🔇 AI is speaking - ignoring audio input to prevent AI voice transcription");
+                processedSpeech = true;
+                return;
+              }
               
-              // Get responses from GPT based on current mode
-              const currentMode = modeRef.current; // Use ref for immediate value
-              const prompt = currentMode === "sales" 
-                ? `Customer said: "${captured}". 
-
-SALES MODE INSTRUCTIONS:
-- Always professional, confident, and helpful
-- Short and clear answers (max 2-3 sentences)
-- Never sound unsure or negative
-- Focus on benefits, value, and closing
-- Handle objections directly (price, competition, timing)
-- Always give 3 different responses
-- Small Talk: Keep it polite and short (e.g., "I'm doing well, thanks for asking."). Then quickly guide the conversation back to the sales topic.
-
-Generate 3 different persuasive sales responses that help close deals, address objections, and build value. Each response should be professional, confident, and focused on benefits and closing:`
-                : `Customer said: "${captured}". 
-
-SUPPORT MODE INSTRUCTIONS:
-- Empathetic, problem-solving tone
-- Give clear instructions or next steps
-- Keep it simple and easy to understand
-- Always give 1 response only
-
-Generate 1 empathetic support response that solves problems, shows understanding, and provides clear solutions. Focus on problem resolution and customer satisfaction:`;
+              // Mark as processing to prevent duplicate calls
+              processedSpeech = true;
               
-              const { responseText } = await runGpt({ transcript: prompt, mode: currentMode, conversationHistory });
+              // Process with complete pipeline (STT -> GPT -> TTS)
+              // Pipeline uses streaming STT internally, so we get live transcript in one call
+              let pipelineResult;
+              try {
+                console.log("🎤 Sending audio to backend, size:", blob.size);
+                pipelineResult = await runVoicePipeline({
+                  audioBlob: blob,
+                  mode: modeRef.current,
+                  voice: aiVoiceSelection,
+                  language: language === "German" ? "de-DE" : "en-US",
+                  encoding: encodingRef.current,
+                  hints: defaultHints,
+                  boost: sttBoost,
+                  sttModel,
+                  conversationHistory
+                });
+              } catch (pipelineError) {
+                console.error("❌ Pipeline error:", pipelineError);
+                showToast("⚠️ Voice pipeline error - Check Google Cloud STT configuration");
+                // Already marked as processed above
+                return; // Stop processing and don't add to history
+              }
               
-              if (responseText) {
-                // Parse response based on current mode
-                let suggestions = [];
+              const { transcript, responseText, audioUrl, keyHighlights, sentimentData, error, message } = pipelineResult || {};
+              
+              // Handle server-side error response
+              if (error || message) {
+                console.warn("⚠️ Pipeline returned error:", error || message);
+                showToast(`⚠️ ${message || error || "Voice processing failed"}`);
+                // Already marked as processed above
+                return; // Don't process error as transcript
+              }
+              
+              // Skip if no transcript at all
+              if (!transcript || !transcript.trim()) {
+                console.warn("⚠️ No transcript received, skipping");
+                // Already marked as processed above
+                return;
+              }
+              
+              if (transcript && transcript.trim()) {
+                console.log("🎤 Google STT final result:", transcript);
                 
-                if (currentMode === "sales") {
-                  // For sales mode, check if we have multiple questions format
-                  if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse multiple questions format and group responses by type (A, B, C)
-                    const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
-                    
-                    // Group responses by type across all questions
-                    const responsesByType = { A: [], B: [], C: [] };
-                    
-                    questionBlocks.forEach((block, blockIndex) => {
-                      const lines = block.split('\n').filter(line => line.trim());
-                      
-                      lines.forEach((line, lineIndex) => {
-                        if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
-                          const text = line.replace(/^Response [ABC]:\s*/, '').trim();
-                          if (text) {
-                            const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
-                            responsesByType[responseType].push({
-                              responseText: text
-                            });
-                          }
-                        }
-                      });
-                    });
-                    
-                    // Create combined suggestions grouped by response type
-                    suggestions = [];
-                    ['A', 'B', 'C'].forEach(type => {
-                      if (responsesByType[type].length > 0) {
-                        // Combine all responses of this type (only answers, no questions)
-                        const combinedText = responsesByType[type]
-                          .map((item, index) => item.responseText)
-                          .join('\n\n');
-                        
-                        suggestions.push({
-                          id: suggestions.length + 1,
-                          text: combinedText,
-                          timestamp: Date.now(),
-                          responseType: type,
-                          isCombinedResponse: true
-                        });
-                      }
-                    });
-                    console.log(`🎯 Parsed ${suggestions.length} combined responses from ${questionBlocks.length} questions for sales mode`);
-                  } else if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
-                    // Parse single question database responses
-                    const responseLines = responseText.split('\n').filter(line => line.trim());
-                    suggestions = responseLines.map((line, index) => {
-                      const text = line.replace(/^Response [ABC]:\s*/, '').trim();
-                      const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
-                      return {
-                        id: index + 1,
-                        text: text,
-                        timestamp: Date.now(),
-                        responseType: responseType
-                      };
-                    });
-                    console.log(`🎯 Parsed ${suggestions.length} database responses for sales mode`);
-                  } else {
-                    // Fallback to original parsing for non-database responses
-                    const lines = responseText.split('\n').filter(line => line.trim());
-                    suggestions = lines.slice(0, 3).map((suggestion, index) => ({
-                      id: index + 1,
-                      text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
-                      timestamp: Date.now(),
-                      responseType: String.fromCharCode(65 + index) // A, B, C
-                    }));
-                    console.log(`🎯 Generated ${suggestions.length} new responses for sales mode`);
+                // Skip processing if this is an error message or empty detection (prevents infinite loop)
+                const isErrorTranscript = transcript.includes("Google Cloud Speech-to-Text is not configured") ||
+                                         transcript.includes("AI response generation failed") ||
+                                         transcript.toLowerCase().includes("error") ||
+                                         transcript.toLowerCase().includes("failed") ||
+                                         transcript.toLowerCase().includes("no speech detected") ||
+                                         transcript.toLowerCase().trim() === "" ||
+                                         !speechDetected; // Don't process if no speech was detected
+                
+                if (isErrorTranscript) {
+                  console.warn("⚠️ Skipping error/empty message to prevent loop:", transcript);
+                  if (!transcript.toLowerCase().includes("no speech detected")) {
+                    showToast("⚠️ Google Cloud STT configuration issue");
                   }
-                } else {
-                  // Support mode - single response
-                  suggestions = [{
-                    id: 1,
-                    text: responseText.trim(),
-                    timestamp: Date.now()
-                  }];
-                  console.log(`🎯 Generated 1 response for support mode`);
+                  // Already marked as processed above
+                  return; // Don't process or add to history
                 }
                 
-                console.log(`✅ Generated ${suggestions.length} suggestion(s):`, suggestions.map(s => s.text.substring(0, 50) + '...'));
+                // Update with final transcript - show actual text in live transcript
+                setCurrentUserInput(transcript.trim());
+                setTranscript(transcript);
+                // Update sentiment data first, then rebuild transcript with sentiment
+                if (sentimentData) {
+                  setSentimentData(sentimentData);
+                  console.log("🎨 Sentiment updated:", sentimentData);
+                }
+                rebuildLiveTranscriptWithQuery(conversationHistory, transcript, sentimentData);
+                console.log("📝 Live transcript updated with actual text:", transcript);
                 
-                if (suggestions.length > 0) {
-                  setCoachingSuggestions(suggestions);
-                  // Keep live transcript showing Response A (default response)
-                  setShowLiveTranscript(true);
-                  // Hide buttons when new response arrives
-                  setShowCoachingButtons(false);
-                  // Trigger button animation for new responses
-                  setCoachingButtonsRefreshing(true);
-                  setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
-                  // Show buttons after 3 seconds
-                  setTimeout(() => setShowCoachingButtons(true), 3000);
-                  // Set first actual response (not question header) as the main answer and auto-play it
-                  // For auto-play, only use Response A specifically, not B or C
-                  const firstResponse = suggestions.find(s => !s.isQuestionHeader && !s.isCombinedResponse && s.responseType === 'A');
-                  let firstAnswer = firstResponse ? firstResponse.text : suggestions.find(s => s.responseType === 'A')?.text || suggestions[0].text;
-                  
-                  // If we still have a combined response, take only the first part before any double newlines
-                  if (firstAnswer && firstAnswer.includes('\n\n')) {
-                    firstAnswer = firstAnswer.split('\n\n')[0];
-                  }
-                  
-                  // Only set Response A in Predator Answer box
-                  const responseA = suggestions.find(s => s.responseType === 'A');
-                  const predatorAnswerText = responseA ? responseA.text : "Response A not found";
-                  console.log("🎯 Response A found (2):", responseA);
-                  console.log("🎯 Predator Answer Text (2):", predatorAnswerText);
-                  setPredatorAnswer(predatorAnswerText);
-                  
-                  // Live transcript will be updated by addConversationEntry function
-                  
-                  triggerRefreshAnimation();
-                  
-                  // Add to conversation history with all A/B/C responses
-                  addConversationEntry(captured, firstAnswer, suggestions);
-                  
-                  // Process customer information for CRM
-                  processCustomerInfo(captured);
-                  
-                  
-                  if (speechActive && !userSelectingResponse) {
-                    // Use TTS with selected voice for better quality
-                    console.log("🎯 Auto-playing main response:", predatorAnswerText);
-                    try {
-                      const ttsResult = await runTts({ text: predatorAnswerText, voice: aiVoiceSelection });
-                      if (ttsResult.audioUrl) {
-                        stopAllInput();
-                        stopAllAudio();
-                        const audio = new Audio(ttsResult.audioUrl);
-                        currentAudioRef.current = audio;
-                        
-                        // Set TTS playing state immediately
-                        console.log("🔊 Setting TTS playing state to true");
-                        setIsTtsPlaying(true);
-                        isTtsPlayingRef.current = true;
-                        
-                        // Add event listeners before playing
-                        audio.addEventListener('play', () => {
-                          console.log("🔊 TTS audio started playing (addEventListener)");
-                          setIsTtsPlaying(true);
-                          isTtsPlayingRef.current = true;
-                        });
-                        
-                        audio.addEventListener('ended', () => {
-                          console.log("🔊 TTS audio ended (addEventListener)");
-                          setIsTtsPlaying(false);
-                          isTtsPlayingRef.current = false;
-                        });
-                        
-                        audio.onplay = () => {
-                          console.log("🔊 TTS audio started playing (onplay)");
-                          setIsTtsPlaying(true);
-                          isTtsPlayingRef.current = true;
-                        };
-                        audio.onended = () => { 
-                          console.log("🔊 TTS audio ended, streaming:", streaming);
-                          console.log("🔊 TTS audio ended");
-                          setIsTtsPlaying(false);
-                          isTtsPlayingRef.current = false;
-                          currentAudioRef.current = null;
-                          // Restart microphone after AI speech ends
-                          restartMicrophone();
-                          setMicReactivated(true);
-                          setTimeout(() => setMicReactivated(false), 2000);
-                        };
-                        audio.play().catch(e => {
-                          console.error("TTS audio playback failed:", e);
-                          speakText(predatorAnswerText);
-                        });
+                // Process response from pipeline
+                if (responseText && responseText.trim()) {
+                    const speedTimer = startSpeedTimer();
+                  try {
+                    setIsProcessing(true);
+                    isProcessingRef.current = true; // Track in ref
+                    stopAllAudio();
+                    // Show processing status (without sentiment emoji during processing)
+                    rebuildLiveTranscriptWithQuery(conversationHistory, `🔄 Processing: ${transcript.trim()}`, null);
+                    setCurrentUserInput("");
+                    
+                    if (responseText) {
+                      // Sentiment data removed
+                      
+                      // Parse response based on current mode (same logic as before)
+                      let suggestions = [];
+                      
+                      if (modeRef.current === "sales") {
+                        if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                          const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
+                          const responsesByType = { A: [], B: [], C: [] };
+                          
+                          questionBlocks.forEach((block) => {
+                            const lines = block.split('\n').filter(line => line.trim());
+                            lines.forEach((line) => {
+                              if (line.includes("Response A:") || line.includes("Response B:") || line.includes("Response C:")) {
+                                const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                                if (text) {
+                                  const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
+                                  responsesByType[responseType].push({ responseText: text });
+                                }
+                              }
+                            });
+                          });
+                          
+                          suggestions = [];
+                          ['A', 'B', 'C'].forEach(type => {
+                            if (responsesByType[type].length > 0) {
+                              const combinedText = responsesByType[type]
+                                .map(item => item.responseText)
+                                .join('\n\n');
+                              
+                              suggestions.push({
+                                id: suggestions.length + 1,
+                                text: combinedText,
+                                timestamp: Date.now(),
+                                responseType: type,
+                                isCombinedResponse: true
+                              });
+                            }
+                          });
+                        } else if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
+                          const responseLines = responseText.split('\n').filter(line => line.trim());
+                          suggestions = responseLines.map((line, index) => {
+                            const text = line.replace(/^Response [ABC]:\s*/, '').trim();
+                            const responseType = line.includes("Response A:") ? "A" : line.includes("Response B:") ? "B" : "C";
+                            return {
+                              id: index + 1,
+                              text: text,
+                              timestamp: Date.now(),
+                              responseType: responseType
+                            };
+                          });
+                        } else {
+                          const lines = responseText.split('\n').filter(line => line.trim());
+                          suggestions = lines.slice(0, 3).map((suggestion, index) => ({
+                            id: index + 1,
+                            text: suggestion.replace(/^\d+\.?\s*/, '').replace(/^-\s*/, '').trim(),
+                            timestamp: Date.now(),
+                            responseType: String.fromCharCode(65 + index)
+                          }));
+                        }
                       } else {
-                        speakText(predatorAnswerText);
+                        suggestions = [{
+                          id: 1,
+                          text: responseText.trim(),
+                          timestamp: Date.now()
+                        }];
                       }
-                    } catch (ttsError) {
-                      console.error("TTS failed:", ttsError);
-                      speakText(predatorAnswerText);
+                      
+                      if (suggestions.length > 0) {
+                        setCoachingSuggestions(suggestions);
+                        setShowLiveTranscript(true);
+                        setShowCoachingButtons(false);
+                        setCoachingButtonsRefreshing(true);
+                        setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
+                        setTimeout(() => setShowCoachingButtons(true), 3000);
+                        
+                        const responseA = suggestions.find(s => s.responseType === 'A');
+                        const predatorAnswerText = responseA ? responseA.text : "Response A not found";
+                        setPredatorAnswer(predatorAnswerText);
+                        
+                        triggerRefreshAnimation();
+                        
+                        // Add to conversation history - this will automatically rebuild live transcript
+                        addConversationEntry(transcript, predatorAnswerText, suggestions, sentimentData);
+                        
+                        // Ensure live transcript shows after state update
+                        setTimeout(() => {
+                          setShowLiveTranscript(true);
+                        }, 200);
+                        
+                        processCustomerInfo(transcript);
+                        
+                        // Auto-play ONLY Response A TTS from pipeline (single audio, no fallback)
+                        if (speechActive && !userSelectingResponse && audioUrl) {
+                          console.log("🎵 FRONTEND: Playing Response A TTS audio from pipeline");
+                          
+                          // Ensure only ONE audio plays - stop all other audio
+                          stopAllInput();
+                          stopAllAudio();
+                          
+                          // Create single audio instance
+                          const audio = new Audio(audioUrl);
+                          currentAudioRef.current = audio;
+                          
+                          setIsTtsPlaying(true);
+                          isTtsPlayingRef.current = true;
+                          
+                          audio.onplay = () => {
+                            console.log("🎵 FRONTEND: Response A TTS started playing");
+                            setIsTtsPlaying(true);
+                            isTtsPlayingRef.current = true;
+                          };
+                          
+                          audio.onended = () => { 
+                            console.log("🎵 FRONTEND: Response A TTS finished playing");
+                            setIsTtsPlaying(false);
+                            isTtsPlayingRef.current = false;
+                            currentAudioRef.current = null;
+                            restartMicrophone();
+                            setMicReactivated(true);
+                            setTimeout(() => setMicReactivated(false), 2000);
+                          };
+                          
+                          audio.onerror = () => {
+                            console.error("❌ FRONTEND: Response A TTS audio playback error");
+                            setIsTtsPlaying(false);
+                            isTtsPlayingRef.current = false;
+                            currentAudioRef.current = null;
+                            restartMicrophone();
+                          };
+                          
+                          // Play single audio only
+                          audio.play().catch((e) => {
+                            console.error("❌ FRONTEND: Response A TTS audio playback failed:", e);
+                            setIsTtsPlaying(false);
+                            isTtsPlayingRef.current = false;
+                            currentAudioRef.current = null;
+                            restartMicrophone();
+                          });
+                        } else {
+                          console.log("⚠️ FRONTEND: Skipping TTS - conditions not met:", {
+                            speechActive,
+                            userSelectingResponse,
+                            hasAudioUrl: !!audioUrl
+                          });
+                        }
+                      }
+                    }
+                    } catch (err) {
+                      console.error('Pipeline processing error:', err);
+                      showToast('Pipeline failed');
+                    } finally {
+                      setIsProcessing(false);
+                      isProcessingRef.current = false; // Update ref
+                      endSpeedTimer(speedTimer);
                     }
                   }
                 }
               }
-            } catch (err) {
-              console.error('GPT after-silence error:', err);
-              showToast('GPT failed');
+            } catch (error) {
+              console.error("Google STT processing error:", error);
             } finally {
-              setIsProcessing(false);
-              endSpeedTimer(speedTimer);
+              // Stop all tracks
+              stream.getTracks().forEach(track => track.stop());
+              processedSpeech = true; // Mark as processed
+              isProcessingInOnstop = false; // Reset processing flag
             }
-          }, 2000); // Reduced from 3000ms to 2000ms for better responsiveness while handling pauses
-        } else if (interimTranscript) {
-          // Show interim results - use only interim content
-          setLiveTranscript(interimTranscript);
-          // Clear any pending silence timeout when user is actively speaking
-          if (silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
-          }
-          // Update current user input for display during interim results
-          setCurrentUserInput(interimTranscript);
-          // Note: Audio stopping is now handled at the beginning of onresult
-        }
-      };
-      
-      recognition.onerror = (event) => {
-        console.error("🎤 Speech recognition error:", event.error);
-        console.error("🎤 Error details:", event);
-        if (event.error === "not-allowed") {
-          showToast("Microphone permission denied");
-        } else if (event.error === "no-speech") {
-          console.log("🎤 No speech detected - this is normal, continuing to listen");
-          // Don't show error toast for no-speech, it's expected behavior
-        } else if (event.error === "aborted") {
-          console.log("🎤 Recognition aborted");
-        } else if (event.error === "network") {
-          console.log("🎤 Network error - speech recognition failed");
-          showToast("Network error - speech recognition failed");
-        } else if (event.error === "audio-capture") {
-          console.log("🎤 Audio capture error");
-          showToast("Audio capture error - check microphone");
-        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          console.log("🎤 Unknown speech recognition error:", event.error);
-          showToast("Speech recognition error: " + event.error);
-        }
-      };
-      
-      recognition.onend = () => {
-        console.log("🎤 Recognition ended");
-        console.log("🎤 End details:", {
-          streaming,
-          streamingRef: streamingRef.current,
-          manuallyStopped: manuallyStoppedRef.current,
-          ttsPlaying: isTtsPlaying || isTtsPlayingRef.current,
-          recognitionInstance: !!recognitionRef.current
-        });
-        // Only restart recognition if it wasn't manually stopped
-        if (!manuallyStoppedRef.current && streamingRef.current) {
-          // Immediate restart for truly continuous listening
-          console.log("🔄 Immediate restart for continuous listening...");
-          startRealTimeRecognition();
-        } else {
-          console.log("🛑 Recognition not restarted - was manually stopped");
-        }
-      };
-      
-      recognitionRef.current = recognition;
-      console.log("🎤 Starting recognition...");
-      
-      // Add a delay to ensure previous recognition is fully stopped
-      setTimeout(() => {
-        try {
-          recognition.start();
-          console.log("🎤 Recognition start() called successfully");
-          setIsVoiceActive(true); // Mic is listening when starting
+        };
+        
+        // Wait for speech to be detected before starting recording
+        let lastAudioTime = Date.now();
+        let speechDetected = false;
+        let silenceDetected = false;
+        let isRecording = false;
+        let lastLogTime = 0;
+        const LOG_INTERVAL = 2000; // Log every 2 seconds to reduce spam
+        
+        // Create audio context to analyze volume
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        // Function to check for speech detection and silence
+        const checkSpeechAndSilence = () => {
+          if (silenceDetected || !streamingRef.current) return;
           
-          // Add a backup restart mechanism in case recognition fails to start properly
-          setTimeout(() => {
-            if (!streamingRef.current && !manuallyStoppedRef.current) {
-              console.log("🔄 Backup restart - recognition may not have started properly");
-              startRealTimeRecognition();
+          // Don't start new recording if processing is in progress
+          if (isProcessingRef.current) {
+            requestAnimationFrame(checkSpeechAndSilence);
+            return;
+          }
+          
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          
+          // Detect speech (lower threshold to catch softer speech - reduced from 35 to 28 for better sensitivity)
+          if (average > 28 && !speechDetected && !isRecording) {
+            speechDetected = true;
+            isRecording = true;
+            lastAudioTime = Date.now();
+            console.log("🎤 Speech detected, starting recording...");
+            // Clear previous live transcript to start fresh
+            setCurrentUserInput("");
+            accumulatedTranscriptRef.current = ""; // Reset accumulated transcript
+            
+            // Start Web Speech API for live word-by-word transcription
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+              const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+              const recognition = new SpeechRecognition();
+              recognition.continuous = true;
+              recognition.interimResults = true;
+              recognition.lang = language === "German" ? "de-DE" : "en-US";
+              
+              recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                  const transcript = event.results[i][0].transcript;
+                  if (event.results[i].isFinal) {
+                    finalTranscript += transcript + ' ';
+                  } else {
+                    interimTranscript += transcript;
+                  }
+                }
+                
+                const fullTranscript = finalTranscript + interimTranscript;
+                if (fullTranscript.trim()) {
+                  console.log("📝 Web Speech API live transcript:", fullTranscript);
+                  setCurrentUserInput(fullTranscript.trim());
+                  rebuildLiveTranscriptWithQuery(conversationHistory, fullTranscript.trim());
+                }
+              };
+              
+              recognition.onerror = (event) => {
+                console.log("⚠️ Web Speech API error:", event.error);
+              };
+              
+              recognition.onend = () => {
+                console.log("🎤 Web Speech API ended");
+                speechRecognitionRef.current = null;
+              };
+              
+              recognition.start();
+              speechRecognitionRef.current = recognition; // Store for cleanup
+              console.log("🎤 Web Speech API started for live transcription");
             }
-          }, 1000);
-        } catch (startError) {
-          console.error("🎤 Failed to start recognition:", startError);
-          showToast("Failed to start speech recognition");
-          // Retry once after a short delay
-          setTimeout(() => {
-            if (!manuallyStoppedRef.current && streamingRef.current) {
-              console.log("🔄 Retrying recognition start after error");
-              startRealTimeRecognition();
+            
+            // Start recording with 1000ms timeslice for better STT results
+            mediaRecorder.start(1000);
+          }
+          
+          // If already recording, track audio and silence
+          if (isRecording) {
+            // If audio is detected, update last audio time
+            // Lower threshold (30 instead of 35) to catch softer speech and pauses
+            if (average > 30) {
+              lastAudioTime = Date.now();
+              // Note: Live transcript will be updated by streaming STT in mediaRecorder.ondataavailable
+              // No need to show "Listening" placeholder - just let the actual transcription flow
+            } else {
+              // Natural silence pause detection - 2.5 seconds (2500ms) for natural speech pauses
+              const silenceDuration = Date.now() - lastAudioTime;
+              if (silenceDuration >= 2500 && !silenceDetected) {
+                console.log("🔇 2.5 seconds of silence detected, stopping recording");
+                silenceDetected = true;
+                isRecording = false;
+                // Prevent multiple stop calls
+                if (mediaRecorder.state === 'recording') {
+                  mediaRecorder.stop();
+                }
+                // Only close audio context once
+                try {
+                  audioContext.close();
+                } catch (e) {
+                  // Audio context might already be closed
+                }
+                return;
+              }
             }
-          }, 1000);
+          }
+          
+          // Continue checking if still active
+          if (!silenceDetected && streamingRef.current) {
+            requestAnimationFrame(checkSpeechAndSilence);
+          }
+        };
+        
+        console.log("🎤 Waiting for speech to start recording...");
+        
+        // Start checking for speech
+        setTimeout(() => checkSpeechAndSilence(), 100);
+        
+        // Track completion state
+        let completed = false;
+        
+        // Note: No time limits - recording stops naturally after 2.5 seconds of silence only
+        
+        // Wait for onstop to complete or timeout
+        await new Promise((resolve) => {
+          const checkComplete = () => {
+            if (completed || processedSpeech || (silenceDetected && !isRecording)) {
+              console.log("✅ Recording cycle complete, ready for next query");
+              resolve();
+            } else {
+              setTimeout(checkComplete, 100);
+            }
+          };
+          checkComplete();
+        });
+        
+      } catch (error) {
+        console.error("Microphone access error:", error);
+        showToast("Microphone permission denied");
+      }
+    };
+    
+    // Single recording session (no continuous loop)
+    const recordingLoop = async () => {
+      while (!manuallyStoppedRef.current && streamingRef.current) {
+        try {
+          // Wait if processing is in progress to prevent interruption
+          while (isProcessingRef.current) {
+            console.log("⏳ Processing in progress, waiting before starting new recording...");
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          console.log("🎤 Waiting for you to speak...");
+          await recordAndProcess();
+          console.log("✅ Query processed. Now waiting for your next speech...");
+          // Wait longer to ensure processing is complete before listening again
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        } catch (error) {
+          console.error("Recording error:", error);
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
-      }, 500); // 500ms delay for better stability
-    } else {
-      showToast("Speech recognition not supported in this browser");
-    }
+      }
+      sttRunningRef.current = false;
+    };
+    
+    // Start the recording loop
+    recordingLoop();
   };
 
-  // Stop real-time recognition
+  // Stop Google STT recognition
   const stopRealTimeRecognition = () => {
-    console.log("🛑 Stopping real-time recognition - MIC WILL BE OFF");
+    console.log("🛑 Stopping Google STT recognition - MIC WILL BE OFF");
     manuallyStoppedRef.current = true; // Set flag to prevent auto-restart
     streamingRef.current = false; // Also set ref to false
     
@@ -1515,15 +1402,18 @@ Generate 1 empathetic support response that solves problems, shows understanding
       heartbeatTimerRef.current = null;
     }
     
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
+    // Clear Google STT interval
+    if (googleSttIntervalRef.current) {
+      clearInterval(googleSttIntervalRef.current);
+      googleSttIntervalRef.current = null;
     }
+    
     if (processingTimeoutRef.current) {
       clearTimeout(processingTimeoutRef.current);
     }
     // Stop all processing when mic is stopped
     setIsProcessing(false);
+    isProcessingRef.current = false; // Update ref
     setIsProcessingFast(false);
     setResponseSpeed(null);
     setStreaming(false);
@@ -1548,7 +1438,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
       console.log("🎯 Playing Response", suggestion.responseType);
       // Use TTS with selected voice for better quality
       try {
-        const ttsResult = await runTts({ text: suggestion.text, voice: aiVoiceSelection });
+        const ttsResult = await runTts({ text: suggestion.text, voice: aiVoiceSelection, language: language === "German" ? "de-DE" : "en-US" });
         if (ttsResult.audioUrl) {
           stopAllInput();
           stopAllAudio();
@@ -1587,16 +1477,16 @@ Generate 1 empathetic support response that solves problems, shows understanding
                           // Restart microphone after AI speech ends
                           restartMicrophone(); 
                         };
-          audio.play().catch(e => {
+          audio.play().catch(async (e) => {
             console.error("TTS audio playback failed:", e);
-            speakText(suggestion.text);
+            await speakText(suggestion.text);
           });
         } else {
-          speakText(suggestion.text);
+          await speakText(suggestion.text);
         }
       } catch (ttsError) {
         console.error("TTS failed:", ttsError);
-        speakText(suggestion.text);
+        await speakText(suggestion.text);
       }
     }
     
@@ -1621,6 +1511,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
           <span className="font-bold text-lg sm:text-xl text-center sm:text-left" style={orbitronStyle}>
             SELL PREDATOR Cockpit
           </span>
+          
         </div>
 
         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
@@ -1659,7 +1550,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
           <div className="flex gap-1 mb-2">
             <button
               className="cursor-pointer border rounded-lg px-2 py-1 shadow w-full sm:w-auto hover:bg-gray-100"
-              onClick={startRealTimeRecognition}
+              onClick={startGoogleSttRecognition}
               disabled={streaming}
             >
               {streaming ? (isProcessing ? '🔄 Processing...' : (isTtsPlaying || isTtsPlayingRef.current) ? '🔊 AI Speaking' : micReactivated ? '🎤 Ready!' : '🎤 Auto-Listening') : 'Start Live Mic'}
@@ -1727,15 +1618,18 @@ Generate 1 empathetic support response that solves problems, shows understanding
 
 
           {/* Live Transcript or Conversation History Display */}
-          <div ref={conversationBoxRef} className={`w-full h-[60vh] border-2 border-[#D72638] rounded-2xl p-3 shadow-sm mb-3 ${showLiveTranscript ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div ref={conversationBoxRef} className={`w-full h-[60vh] border-2 border-[#D72638] rounded-2xl p-3 shadow-sm mb-3 overflow-y-auto`}>
             {showLiveTranscript ? (
               /* Live Transcript View */
-              <textarea
-                value={liveTranscript}
-                onChange={(e) => setLiveTranscript(e.target.value)}
-                className="w-full h-full border-none resize-none focus:ring-0 outline-none bg-transparent text-black overflow-y-auto"
-                placeholder={streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
-              />
+              <div className="w-full h-full border-none resize-none focus:ring-0 outline-none bg-transparent text-black text-sm whitespace-pre-wrap">
+                {liveTranscript ? (
+                  formatLiveTranscript(liveTranscript)
+                ) : (
+                  <div className="text-gray-400">
+                    {streaming ? (isProcessing ? "🔄 Processing your query..." : (isTtsPlaying || isTtsPlayingRef.current) ? "🔊 AI is speaking... Just speak to interrupt!" : "🎤 Always listening... Speak anytime! (Response stays visible)") : "Click 'Start Live Mic' to begin listening..."}
+                  </div>
+                )}
+              </div>
             ) : (
               /* Conversation History View from localStorage */
               <>
@@ -1744,24 +1638,30 @@ Generate 1 empathetic support response that solves problems, shows understanding
                     <div className="text-xs text-gray-500 mb-2 font-semibold">
                       {mode === 'sales' ? '📈 Sales Mode History' : '🛠️ Support Mode History'}
                     </div>
-                    {conversationHistory.map((entry) => (
-                      <div key={entry.id} className="space-y-3">
-                        {/* Customer Query */}
-                        <div className="p-3 mb-3 bg-gray-50 rounded-lg">
-                          <div className="text-sm font-semibold mb-1">Customer:</div>
-                          <div className="text-sm">{entry.userInput}</div>
-                          <div className="text-xs text-gray-500 mt-2">{entry.timestamp}</div>
-                        </div>
-                        
-                        {/* Predator AI Response A (default response) */}
-                        {entry.predatorResponse && entry.predatorResponse.trim() && (
-                          <div className="p-3 mb-2 bg-blue-50 rounded-lg">
-                            <div className="text-sm font-semibold mb-1">Predator AI:</div>
-                            <div className="text-sm">{entry.predatorResponse}</div>
+                    {conversationHistory.map((entry) => {
+                      const sentimentEmoji = getSentimentEmoji(entry.sentimentData);
+                      return (
+                        <div key={entry.id} className="space-y-3">
+                          {/* Customer Query */}
+                          <div className="p-3 mb-3 bg-gray-50 rounded-lg">
+                            <div className="text-sm font-bold mb-1">Customer:</div>
+                            <div className="text-sm flex items-center gap-2">
+                              <span>{entry.userInput}</span>
+                              {sentimentEmoji && <span className="text-lg">{sentimentEmoji}</span>}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">{entry.timestamp}</div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          
+                          {/* Predator AI Response A (default response) */}
+                          {entry.predatorResponse && entry.predatorResponse.trim() && (
+                            <div className="p-3 mb-2 bg-blue-50 rounded-lg">
+                              <div className="text-sm font-bold mb-1">Predator AI:</div>
+                              <div className="text-sm">{entry.predatorResponse}</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 
@@ -1995,6 +1895,7 @@ Generate 1 empathetic support response that solves problems, shows understanding
         customerData={customerData}
         isLoading={crmLoading}
         keyHighlights={keyHighlights}
+        sentimentData={sentimentData}
       />
     </div>
   );
