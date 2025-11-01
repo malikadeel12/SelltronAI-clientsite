@@ -883,9 +883,10 @@ export default function PredatorDashboard() {
     const recordAndProcess = async () => {
       try {
         console.log('🎤 FRONTEND: Requesting microphone access...');
-        // Get microphone access
+        // Get microphone access - force mono (1 channel) for Google STT compatibility
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
+            channelCount: 1, // Force mono - Google STT requires mono for WEBM_OPUS
             echoCancellation: true,
             noiseSuppression: true,
             sampleRate: 48000
