@@ -806,7 +806,8 @@ export default function PredatorDashboard() {
       }
       sttWsReadyRef.current = false;
       //const wsBase = 'http://localhost:7000'.replace(/^http/, 'ws');
-      const wsBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:7000').replace(/^http/, 'ws');
+      //const wsBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:7000').replace(/^http/, 'ws');
+      const wsBase = import.meta.env.VITE_API_BASE_URL.replace(/^http/, 'ws');
       const params = new URLSearchParams({
         language: language === 'German' ? 'de-DE' : 'en-US',
         encoding: encodingRef.current || 'WEBM_OPUS',
