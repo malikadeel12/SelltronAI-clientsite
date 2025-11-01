@@ -33,19 +33,15 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }) => {
           
           if (timeDiff < 30) {
             // Newly created user, try to reload user data to get latest emailVerified status
-            console.log('Newly created user, reloading user to check emailVerified status...');
             try {
               // Force user reload to get latest user data from Firebase
               await reload(user);
-              console.log('✅ User reloaded successfully');
               
               // Re-check the user object after reload
               const reloadedUser = auth.currentUser;
               if (reloadedUser && reloadedUser.emailVerified) {
-                console.log('✅ Email verification confirmed after user reload');
                 setEmailVerified(true);
               } else {
-                console.log('❌ Email still not verified after user reload');
                 // Don't allow access - redirect to login with verification message
                 navigate('/login', { 
                   state: { 
@@ -57,7 +53,6 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }) => {
                 return;
               }
             } catch (error) {
-              console.warn('Failed to reload user:', error);
               // Don't allow access if we can't verify status
               navigate('/login', { 
                 state: { 
@@ -79,7 +74,6 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }) => {
             return;
           }
         } else {
-          console.log('✅ Email is verified, allowing access');
           setEmailVerified(true);
         }
       }

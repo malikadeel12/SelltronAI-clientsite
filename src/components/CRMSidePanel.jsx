@@ -68,8 +68,6 @@ const CRMSidePanel = ({ isOpen, onClose, customerData, isLoading }) => {
                 </div>
               </div>
 
-
-
               {/* Last Updated */}
               {customerData.lastUpdated && (
                 <div className="text-xs text-gray-500 text-center pt-4 border-t border-gray-200">

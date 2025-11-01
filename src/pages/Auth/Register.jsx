@@ -261,9 +261,6 @@ export default function SignUp() {
     showToast("Sending verification code...");
 
     try {
-      console.log("🚀 Starting verification process...");
-      console.log("📧 Email:", formData.email);
-      console.log("🌐 API Base URL:", import.meta.env.VITE_API_BASE_URL || "http://localhost:7000");
       
       // Add timeout to prevent hanging (increased for email sending)
       const timeoutPromise = new Promise((_, reject) => 
@@ -272,23 +269,13 @@ export default function SignUp() {
       
       const verificationPromise = sendVerificationCode(formData.email);
       
-      console.log("📧 Sending verification code...");
       const result = await Promise.race([verificationPromise, timeoutPromise]);
       
-      console.log("✅ Verification code sent successfully:", result);
       setStep("verification");
       setTimerExpired(false);
       
       showToast("Verification code sent to your email!");
-      console.log(`📧 Email sent to: ${formData.email}`);
-      console.log(`🔑 Check your email inbox and spam folder for the verification code`);
     } catch (e) {
-      console.error("❌ Signup error:", e);
-      console.error("❌ Error details:", {
-        message: e.message,
-        stack: e.stack,
-        name: e.name
-      });
 
       // Handle specific error cases with user-friendly messages
       let errorMessage = "Failed to send verification code. Please try again.";
@@ -334,14 +321,8 @@ export default function SignUp() {
     showToast("Verifying code...");
 
     try {
-      console.log("🔍 Starting OTP verification...");
-      console.log(`📧 Email: ${formData.email}`);
-      console.log(`🔑 Code: ${verificationCode}`);
-      console.log(`🔑 Code length: ${verificationCode.length}`);
-      console.log(`🔑 Code type: ${typeof verificationCode}`);
       
       await verifyEmailCode(formData.email, verificationCode);
-      console.log("✅ OTP verified successfully");
 
       showToast("Code verified! Creating account...");
 
@@ -358,7 +339,6 @@ export default function SignUp() {
 
       if (cred.status === 'rejected') throw cred.reason;
       const userCred = cred.value;
-      console.log("✅ Firebase account created:", userCred.user.uid);
 
       // Update admin role if needed (after getting actual UID)
       if (formData.email === "admin@gmail.com") {
@@ -369,7 +349,6 @@ export default function SignUp() {
             body: JSON.stringify({ uid: userCred.user.uid, role: "admin" }),
           });
         } catch (e) {
-          console.warn("Failed to assign admin role:", e);
         }
       }
 
@@ -378,9 +357,7 @@ export default function SignUp() {
       // First, ensure email verification is set in Firebase
       try {
         await setEmailVerified(userCred.user.uid);
-        console.log("✅ Email verification status updated in Firebase");
       } catch (error) {
-        console.warn("Failed to update email verification status:", error);
         // Continue anyway as the user is already verified via OTP
       }
 
@@ -388,26 +365,19 @@ export default function SignUp() {
       if (formData.name) {
         try {
           await updateProfile(userCred.user, { displayName: formData.name });
-          console.log("✅ Profile updated successfully");
         } catch (error) {
-          console.warn("Failed to update profile:", error);
         }
       }
 
       // Force Firebase to reload user data to get latest emailVerified status
-      console.log("🔄 Reloading Firebase user to get latest auth state...");
       try {
         await reload(userCred.user);
-        console.log("✅ Firebase user reloaded successfully");
         
         // Check if emailVerified is now true
         if (userCred.user.emailVerified) {
-          console.log("✅ Email verification confirmed after user reload");
         } else {
-          console.log("⚠️ Email verification still not confirmed after reload, but proceeding");
         }
       } catch (error) {
-        console.warn("Failed to reload user, but proceeding:", error);
       }
 
       // Get fresh token and determine role
@@ -425,7 +395,6 @@ export default function SignUp() {
 
       // Sync user to HubSpot (non-blocking)
       try {
-        console.log("🔄 Syncing new user to HubSpot...");
         const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
           method: "POST",
           headers: { 
@@ -436,17 +405,13 @@ export default function SignUp() {
         
         if (hubspotResponse.ok) {
           const hubspotData = await hubspotResponse.json();
-          console.log("✅ User synced to HubSpot successfully:", hubspotData.hubspotContactId);
         } else {
-          console.warn("⚠️ HubSpot sync failed, but continuing with registration");
         }
       } catch (hubspotError) {
-        console.warn("⚠️ HubSpot sync error (non-blocking):", hubspotError.message);
         // Don't fail registration if HubSpot sync fails
       }
 
       // Show success message
-      console.log("🎉 All steps completed successfully!");
       setSuccess(true);
       setLoading(false);
       if (who.role === "admin") {
@@ -456,14 +421,12 @@ export default function SignUp() {
       }
 
       // Redirect immediately since we've confirmed verification
-      console.log("🚀 Redirecting to dashboard...");
       if (who.role === "admin") {
         navigate("/AdminDashboard");
       } else {
         navigate("/predatordashboard");
       }
     } catch (e) {
-      console.error("Verification error:", e);
       setError(e?.message || "Verification failed. Please try again.");
       showToast("Verification failed");
       setLoading(false);
@@ -528,7 +491,7 @@ export default function SignUp() {
         if (cred.user && !cred.user.displayName) {
           updateProfile(cred.user, {
             displayName: cred.user.email?.split('@')[0] || 'User'
-          }).catch(e => console.warn("Failed to update display name:", e));
+          });
         }
 
         // Get user role
@@ -548,7 +511,6 @@ export default function SignUp() {
 
         // Sync Google user to HubSpot (non-blocking)
         try {
-          console.log("🔄 Syncing Google user to HubSpot...");
           const freshTokenForHubspot = await getIdToken(cred.user, true);
           const hubspotResponse = await fetch(`${apiBase}/api/auth/sync-to-hubspot`, {
             method: "POST",
@@ -560,12 +522,9 @@ export default function SignUp() {
           
           if (hubspotResponse.ok) {
             const hubspotData = await hubspotResponse.json();
-            console.log("✅ Google user synced to HubSpot successfully:", hubspotData.hubspotContactId);
           } else {
-            console.warn("⚠️ HubSpot sync failed for Google user, but continuing");
           }
         } catch (hubspotError) {
-          console.warn("⚠️ HubSpot sync error for Google user (non-blocking):", hubspotError.message);
           // Don't fail Google sign-in if HubSpot sync fails
         }
 

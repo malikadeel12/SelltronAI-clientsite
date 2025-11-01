@@ -8,9 +8,7 @@ export const debugApiConfiguration = () => {
     isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
     isProduction: window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
   };
-  
-  console.log('🔧 API Debug Configuration:', config);
-  
+
   // Test API endpoint
   const testApiEndpoint = async () => {
     try {
@@ -20,17 +18,14 @@ export const debugApiConfiguration = () => {
           : "";
       
       const testUrl = `${apiBase}/api/auth/whoami`;
-      console.log(`🧪 Testing API endpoint: ${testUrl}`);
       
       const response = await fetch(testUrl, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
       
-      console.log(`📡 API Response: ${response.status} ${response.statusText}`);
       return response.ok;
     } catch (error) {
-      console.error('❌ API Test Failed:', error);
       return false;
     }
   };

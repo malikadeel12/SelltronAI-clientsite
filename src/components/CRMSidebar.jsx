@@ -17,30 +17,28 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
   // Auto-save key highlights to HubSpot when they are displayed
   useEffect(() => {
     const saveHighlightsToHubSpot = async () => {
+      // Get email from customerData or localStorage
+      const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+      
       // Only save if:
-      // 1. We have customer data with email
+      // 1. We have email (from customerData or localStorage)
       // 2. We have key highlights to save
       // 3. We haven't already saved these highlights
       // 4. We're not currently loading
       if (
-        customerData?.email && 
+        email && 
         Object.keys(keyHighlights).length > 0 && 
         !highlightsSaved && 
         !isLoading
       ) {
         try {
-          console.log('💾 CRM Sidebar: Auto-saving key highlights to HubSpot:', {
-            email: customerData.email,
-            keyHighlights
-          });
           
-          await saveKeyHighlightsToHubSpot(customerData.email, keyHighlights);
+          await saveKeyHighlightsToHubSpot(email, keyHighlights);
           setHighlightsSaved(true);
-          console.log('✅ CRM Sidebar: Key highlights saved successfully to HubSpot');
         } catch (error) {
-          console.error('❌ CRM Sidebar: Failed to save key highlights to HubSpot:', error);
           // Don't set highlightsSaved to true on error, so we can retry
         }
+      } else {
       }
     };
 
@@ -50,42 +48,65 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
   // Auto-save sentiment to HubSpot when it is displayed
   useEffect(() => {
     const saveSentimentToHubSpotFunc = async () => {
+      // Get email from customerData or localStorage
+      const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+      
       // Only save if:
-      // 1. We have customer data with email
+      // 1. We have email (from customerData or localStorage)
       // 2. We have sentiment data to save
       // 3. We haven't already saved this sentiment
       // 4. We're not currently loading
       if (
-        customerData?.email && 
+        email && 
         sentimentData && 
         sentimentData.color && 
         !sentimentSaved && 
         !isLoading
       ) {
         try {
-          console.log('💾 CRM Sidebar: Auto-saving sentiment to HubSpot:', {
-            email: customerData.email,
-            sentimentData
-          });
           
-          await saveSentimentToHubSpot(customerData.email, sentimentData);
+          await saveSentimentToHubSpot(email, sentimentData);
           setSentimentSaved(true);
-          console.log('✅ CRM Sidebar: Sentiment saved successfully to HubSpot');
         } catch (error) {
-          console.error('❌ CRM Sidebar: Failed to save sentiment to HubSpot:', error);
           // Don't set sentimentSaved to true on error, so we can retry
         }
+      } else {
       }
     };
 
     saveSentimentToHubSpotFunc();
   }, [customerData?.email, sentimentData, sentimentSaved, isLoading]);
 
-  // Reset highlights and sentiment saved flags when customer changes
+  // Reset highlights and sentiment saved flags when customer changes or new data arrives
   useEffect(() => {
     setHighlightsSaved(false);
     setSentimentSaved(false);
-  }, [customerData?.email]);
+    
+    // Also update localStorage when customer email changes
+    if (customerData?.email) {
+      localStorage.setItem('crmCustomerEmail', customerData.email);
+    }
+  }, [customerData?.email]); // Reset when customer email changes
+  
+  // Reset saved flags when keyHighlights or sentimentData changes (new conversation data)
+  // Use JSON.stringify to track content changes, not reference changes
+  useEffect(() => {
+    const keyHighlightsStr = JSON.stringify(keyHighlights);
+    const sentimentDataStr = JSON.stringify(sentimentData);
+    
+    // Store previous values to detect actual changes
+    const prevKeyHighlights = sessionStorage.getItem('prevKeyHighlights');
+    const prevSentimentData = sessionStorage.getItem('prevSentimentData');
+    
+    if (prevKeyHighlights !== keyHighlightsStr || prevSentimentData !== sentimentDataStr) {
+      setHighlightsSaved(false);
+      setSentimentSaved(false);
+      
+      // Update stored values
+      sessionStorage.setItem('prevKeyHighlights', keyHighlightsStr);
+      sessionStorage.setItem('prevSentimentData', sentimentDataStr);
+    }
+  }, [keyHighlights, sentimentData]);
   return (
     <>
       {/* Google Fonts */}
@@ -209,7 +230,6 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
                 )}
               </div>
             </div>
-
 
             {/* Key Highlights Section */}
             {Object.keys(keyHighlights).length > 0 && (
@@ -350,15 +370,14 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
                       </>
                     )}
                   </div>
-                  {!highlightsSaved && customerData?.email && (
+                  {!highlightsSaved && (customerData?.email || localStorage.getItem('crmCustomerEmail')) && (
                     <button
                       onClick={async () => {
                         try {
-                          await saveKeyHighlightsToHubSpot(customerData.email, keyHighlights);
+                          const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+                          await saveKeyHighlightsToHubSpot(email, keyHighlights);
                           setHighlightsSaved(true);
-                          console.log('✅ Manual save successful');
                         } catch (error) {
-                          console.error('❌ Manual save failed:', error);
                         }
                       }}
                       className="px-2 py-1 text-xs bg-[#FFD700] text-[#000000] rounded hover:bg-[#FFD700]/80 transition-colors"
@@ -388,15 +407,14 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
                       </>
                     )}
                   </div>
-                  {!sentimentSaved && customerData?.email && (
+                  {!sentimentSaved && (customerData?.email || localStorage.getItem('crmCustomerEmail')) && (
                     <button
                       onClick={async () => {
                         try {
-                          await saveSentimentToHubSpot(customerData.email, sentimentData);
+                          const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+                          await saveSentimentToHubSpot(email, sentimentData);
                           setSentimentSaved(true);
-                          console.log('✅ Manual sentiment save successful');
                         } catch (error) {
-                          console.error('❌ Manual sentiment save failed:', error);
                         }
                       }}
                       className="px-2 py-1 text-xs bg-[#FFD700] text-[#000000] rounded hover:bg-[#FFD700]/80 transition-colors"
@@ -426,3 +444,4 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
 };
 
 export default CRMSidebar;
+

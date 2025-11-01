@@ -26,7 +26,6 @@ export default function Navbar() {
       navigate("/");
       setMenuOpen(false);
     } catch (error) {
-      console.error("Logout failed:", error);
     }
   };
 

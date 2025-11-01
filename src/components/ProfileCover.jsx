@@ -121,7 +121,6 @@ const formatPhoneNumber = (phone, country) => {
   return `${countryData.prefix} ${cleanPhone}`;
 };
 
-
   const handlePhoneChange = (e) => {
     const value = e.target.value;
 
@@ -152,8 +151,6 @@ const formatPhoneNumber = (phone, country) => {
 
   const handlePhoneUpdate = async (e) => {
     e.preventDefault();
-    
-    console.log("📱 Phone update attempt:", phoneNumber);
 
     if (!phoneNumber.trim()) {
       setError("Phone number cannot be empty.");
@@ -176,8 +173,6 @@ const formatPhoneNumber = (phone, country) => {
       try {
         const idToken = await user.getIdToken();
         const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
-        console.log("🌐 API Base URL:", API_BASE);
-        console.log("🔑 Token available:", !!idToken);
         
         const response = await fetch(`${API_BASE}/api/auth/update-profile`, {
           method: 'POST',
@@ -190,12 +185,8 @@ const formatPhoneNumber = (phone, country) => {
           })
         });
 
-        console.log("📡 Response status:", response.status);
-        console.log("📡 Response ok:", response.ok);
-        
         if (response.ok) {
           const data = await response.json();
-          console.log("✅ Server response:", data);
           // Update local state
           setUserData(prev => ({ ...prev, phoneNumber: phoneNumber.trim() }));
           setShowPhoneEdit(false);
@@ -205,15 +196,12 @@ const formatPhoneNumber = (phone, country) => {
           return;
         } else {
           const errorData = await response.json();
-          console.error("❌ Server error:", errorData);
           throw new Error(errorData.error || "Server request failed");
         }
       } catch (serverError) {
-        console.log('Server API not available, falling back to Firestore:', serverError);
       }
 
       // Fallback to direct Firestore update
-      console.log('Saving phone number to Firestore:', phoneNumber.trim());
       await setDoc(doc(db, 'users', user.uid), {
         phoneNumber: phoneNumber.trim(),
         updatedAt: new Date()
@@ -223,7 +211,6 @@ const formatPhoneNumber = (phone, country) => {
       const updatedDoc = await getDoc(doc(db, 'users', user.uid));
       if (updatedDoc.exists()) {
         const savedData = updatedDoc.data();
-        console.log('Verified saved data:', savedData);
         setUserData(savedData);
         setPhoneNumber(savedData.phoneNumber || phoneNumber.trim());
       } else {
@@ -238,7 +225,6 @@ const formatPhoneNumber = (phone, country) => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error updating phone number:', error);
 
       let errorMessage = "Failed to update phone number. Please try again.";
 
@@ -255,8 +241,6 @@ const formatPhoneNumber = (phone, country) => {
 
   const handleCompanyUpdate = async (e) => {
     e.preventDefault();
-    
-    console.log("🏢 Company update attempt:", companyName);
 
     if (!companyName.trim()) {
       setError("Company name cannot be empty.");
@@ -271,8 +255,6 @@ const formatPhoneNumber = (phone, country) => {
       try {
         const idToken = await user.getIdToken();
         const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000";
-        console.log("🌐 API Base URL:", API_BASE);
-        console.log("🔑 Token available:", !!idToken);
         
         const response = await fetch(`${API_BASE}/api/auth/update-profile`, {
           method: 'POST',
@@ -285,12 +267,8 @@ const formatPhoneNumber = (phone, country) => {
           })
         });
 
-        console.log("📡 Response status:", response.status);
-        console.log("📡 Response ok:", response.ok);
-        
         if (response.ok) {
           const data = await response.json();
-          console.log("✅ Server response:", data);
           // Update local state
           setUserData(prev => ({ ...prev, companyName: companyName.trim() }));
           setShowCompanyEdit(false);
@@ -300,15 +278,12 @@ const formatPhoneNumber = (phone, country) => {
           return;
         } else {
           const errorData = await response.json();
-          console.error("❌ Server error:", errorData);
           throw new Error(errorData.error || "Server request failed");
         }
       } catch (serverError) {
-        console.log('Server API not available, falling back to Firestore:', serverError);
       }
 
       // Fallback to direct Firestore update
-      console.log('Saving company name to Firestore:', companyName.trim());
       await setDoc(doc(db, 'users', user.uid), {
         companyName: companyName.trim(),
         updatedAt: new Date()
@@ -318,7 +293,6 @@ const formatPhoneNumber = (phone, country) => {
       const updatedDoc = await getDoc(doc(db, 'users', user.uid));
       if (updatedDoc.exists()) {
         const savedData = updatedDoc.data();
-        console.log('Verified saved data:', savedData);
         setUserData(savedData);
         setCompanyName(savedData.companyName || companyName.trim());
       } else {
@@ -333,7 +307,6 @@ const formatPhoneNumber = (phone, country) => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error updating company name:', error);
 
       let errorMessage = "Failed to update company name. Please try again.";
 
@@ -444,7 +417,6 @@ const formatPhoneNumber = (phone, country) => {
             setPhoneNumber('');
           }
         } catch (error) {
-          console.error('Error loading user data:', error);
         }
       } else {
         navigate("/signUp");
@@ -453,7 +425,6 @@ const formatPhoneNumber = (phone, country) => {
 
     return () => unsubscribe();
   }, [navigate]);
-
 
   if (!user) {
     return (
@@ -503,7 +474,7 @@ const formatPhoneNumber = (phone, country) => {
 
           {/* User Info Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6 border border-[#FFD700]">
+            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6">
               <div className="flex items-center mb-3 sm:mb-4">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#FFD700] rounded-lg flex items-center justify-center mr-3">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#000000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,7 +487,7 @@ const formatPhoneNumber = (phone, country) => {
               <p className="text-sm sm:text-lg font-semibold text-[#000000] break-all" style={openSansStyle}>{user.email}</p>
             </div>
 
-            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6 border border-[#FFD700]">
+            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6">
               <div className="flex items-center mb-3 sm:mb-4">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#FFD700] rounded-lg flex items-center justify-center mr-3">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#000000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -531,7 +502,7 @@ const formatPhoneNumber = (phone, country) => {
               </p>
             </div>
 
-            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6 border border-[#FFD700]">
+            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <div className="flex items-center">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#FFD700] rounded-lg flex items-center justify-center mr-3">
@@ -593,7 +564,7 @@ const formatPhoneNumber = (phone, country) => {
               )}
             </div>
 
-            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6 border border-[#FFD700]">
+            <div className="bg-[#ffffff] rounded-xl sm:rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border-l-4 border-[#FFD700] p-4 sm:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <div className="flex items-center">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#FFD700] rounded-lg flex items-center justify-center mr-3">

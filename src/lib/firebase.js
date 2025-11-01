@@ -36,11 +36,7 @@ function getFirebaseConfigFromEnv() {
   const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
   const missing = requiredKeys.filter((k) => !config[k]);
   if (missing.length > 0) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `Firebase config is missing: ${missing.join(", ")}. ` +
-        "Define VITE_FIREBASE_* variables in client/.env.local."
-    );
+    // Missing config will cause errors at runtime
   }
 
   return config;
@@ -81,5 +77,4 @@ export const db = getDbInstance();
 // when env isn't ready during build/dev. Call `getAuthInstance()` where needed.
 
 // TODO: Add support for other Firebase services (Firestore/Storage) when required by business logic.
-
 
