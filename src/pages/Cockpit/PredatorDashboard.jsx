@@ -67,7 +67,7 @@ export default function PredatorDashboard() {
   const [userSelectingResponse, setUserSelectingResponse] = useState(false);
   // Sentiment analysis state
   const [sentimentData, setSentimentData] = useState(null);
-  
+
   // STT accuracy tuners
   const sttModel = 'latest_long';
   const sttBoost = 16; // 10-20 is common
@@ -77,7 +77,7 @@ export default function PredatorDashboard() {
   const accumulatedTranscriptRef = useRef(""); // Track accumulated live transcript
   const currentUserInputRef = useRef(""); // Track current live transcript for pipeline
   const latestWsTranscriptRef = useRef(""); // Always hold most recent WS transcript for this session
-  
+
   // Load conversation history from localStorage for both modes
   useEffect(() => {
     const savedHistory = localStorage.getItem('predatorConversationHistory');
@@ -85,7 +85,7 @@ export default function PredatorDashboard() {
       try {
         const history = JSON.parse(savedHistory);
         setConversationHistory(history);
-        
+
         // Load all previous conversations into live transcript
         if (history.length > 0) {
           rebuildLiveTranscript(history);
@@ -105,7 +105,7 @@ export default function PredatorDashboard() {
       localStorage.setItem('predatorConversationHistory', JSON.stringify(conversationHistory));
     }
   }, [conversationHistory]);
-  
+
   // Auto-scroll Predator Answer box to bottom when new content arrives
   useEffect(() => {
     const box = conversationBoxRef.current;
@@ -132,7 +132,7 @@ export default function PredatorDashboard() {
   // Helper function to format live transcript with bold labels
   const formatLiveTranscript = (text) => {
     if (!text) return null;
-    
+
     const lines = text.split('\n');
     return lines.map((line, index) => {
       // Check if line starts with "Customer:" or "Predator AI:"
@@ -157,12 +157,12 @@ export default function PredatorDashboard() {
           );
         }
       }
-      
+
       // Regular line (empty line or other content)
       if (line.trim() === '') {
         return <div key={index} className="mb-2"></div>;
       }
-      
+
       return <div key={index} className="mb-2">{line}</div>;
     });
   };
@@ -178,7 +178,7 @@ export default function PredatorDashboard() {
     } else {
       setLiveTranscript("");
     }
-    
+
     // Auto-scroll to bottom when transcript is rebuilt
     setTimeout(() => {
       const box = conversationBoxRef.current;
@@ -200,13 +200,13 @@ export default function PredatorDashboard() {
 
   // Function to rebuild live transcript with current live query
   const rebuildLiveTranscriptWithQuery = (history, currentQuery, currentSentiment = null) => {
-    
+
     if (history.length > 0) {
       const allConversations = history.map(entry => {
         const sentimentEmoji = getSentimentEmoji(entry.sentimentData);
         return `Customer: ${entry.userInput}${sentimentEmoji ? ' ' + sentimentEmoji : ''}\n\nPredator AI: ${entry.predatorResponse}`;
       }).join('\n\n');
-      
+
       if (currentQuery && currentQuery.trim()) {
         const currentSentimentEmoji = getSentimentEmoji(currentSentiment);
         const fullTranscript = `${allConversations}\n\nCustomer: ${currentQuery}${currentSentimentEmoji ? ' ' + currentSentimentEmoji : ''}`;
@@ -223,7 +223,7 @@ export default function PredatorDashboard() {
         setLiveTranscript("");
       }
     }
-    
+
     // Force auto-scroll multiple times to ensure it works
     forceAutoScroll();
     setTimeout(() => forceAutoScroll(), 200);
@@ -235,7 +235,7 @@ export default function PredatorDashboard() {
     // Get Response A (default response)
     const responseA = suggestions.find(s => s.responseType === 'A')?.text || suggestions[0]?.text || '';
     const cleanResponseA = responseA.replace(/^[ABC]:\s*/, '');
-    
+
     const newEntry = {
       id: Date.now(),
       timestamp: new Date().toLocaleTimeString(),
@@ -294,7 +294,7 @@ export default function PredatorDashboard() {
   const speechRecognitionRef = useRef(null);
   const sttWsRef = useRef(null);
   const sttWsReadyRef = useRef(false);
-  
+
   // Stop any active microphone inputs (Google STT or manual recording)
   const stopAllInput = () => {
     // Stop Google STT interval if running
@@ -312,14 +312,14 @@ export default function PredatorDashboard() {
     }
     // Close STT WebSocket if open
     if (sttWsRef.current) {
-      try { sttWsRef.current.close(); } catch (_) {}
+      try { sttWsRef.current.close(); } catch (_) { }
       sttWsRef.current = null;
       sttWsReadyRef.current = false;
     }
     // Stop MediaRecorder recording if active
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== "inactive") {
-      try { rec.stop(); } catch (_) {}
+      try { rec.stop(); } catch (_) { }
     }
     mediaRecorderRef.current = null; // Clear MediaRecorder reference
     // Clear heartbeat timer
@@ -343,14 +343,14 @@ export default function PredatorDashboard() {
     if (!t || t === lastProcessedTranscriptRef.current) {
       return; // Skip if same transcript or empty
     }
-    
+
     lastProcessedTranscriptRef.current = t;
-    
+
     try {
       // First, try to extract specific customer information from the conversation
       // Server already has filtering to skip GPT call if no contact info detected
       const { extractedData } = await extractCustomerInfo(transcript, conversationHistory);
-      
+
       // Only proceed if we found actual customer information
       if (!extractedData || (!extractedData.email && !extractedData.name && !extractedData.phone && !extractedData.company)) {
         return;
@@ -360,12 +360,12 @@ export default function PredatorDashboard() {
       if (!customerData && !crmSidebarVisible) {
         setCrmLoading(true);
       }
-      
+
       let customerFound = false;
-      
+
       // Method 1: Try traditional extraction (email, name, phone, company)
       if (extractedData && (extractedData.email || extractedData.name || extractedData.phone || extractedData.company)) {
-        
+
         // Only show HubSpot data, not extracted data
         if (extractedData.email) {
           // Try to get existing customer data from HubSpot by email
@@ -374,12 +374,12 @@ export default function PredatorDashboard() {
             if (existingData) {
               setCrmSidebarVisible(true);
               customerFound = true;
-              
+
               // Only use HubSpot data - do not merge with extracted data
               // This ensures CRM sidebar shows only HubSpot data as requested
               setCustomerData(existingData);
               showToast("Customer data loaded from HubSpot CRM");
-              
+
               // Update customer data in HubSpot with new information if any fields were updated
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
@@ -402,13 +402,13 @@ export default function PredatorDashboard() {
             if (searchResult && searchResult.customers && searchResult.customers.length > 0) {
               setCrmSidebarVisible(true);
               customerFound = true;
-              
+
               const existingCustomer = searchResult.customers[0];
               // Only use HubSpot data - do not merge with extracted data
               // This ensures CRM sidebar shows only HubSpot data as requested
               setCustomerData(existingCustomer);
               showToast("Customer data loaded from HubSpot CRM");
-              
+
               // Update customer data in HubSpot with new information if any fields were updated
               if (extractedData.name || extractedData.phone || extractedData.company) {
                 try {
@@ -429,9 +429,9 @@ export default function PredatorDashboard() {
 
       if (!customerFound) {
         setCustomerData(null);
-        
+
       }
-      
+
     } catch (error) {
       showToast("Failed to process customer information");
       setCustomerData(null);
@@ -442,14 +442,14 @@ export default function PredatorDashboard() {
 
   // Function to stop all audio playback and mute microphone during AI speech
   const stopAllAudio = () => {
-    
+
     // Stop any playing audio immediately
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current.currentTime = 0;
       currentAudioRef.current = null;
     }
-    
+
     // Mute microphone during AI speech to prevent feedback loop
     if (googleSttIntervalRef.current) {
       try {
@@ -458,12 +458,12 @@ export default function PredatorDashboard() {
       } catch (e) {
       }
     }
-    
+
   };
 
   // Function to restart microphone after AI speech ends
   const restartMicrophone = () => {
-    
+
     // Only restart if mic wasn't manually stopped and no audio is playing
     if (!manuallyStoppedRef.current && !isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
       setTimeout(() => {
@@ -480,7 +480,7 @@ export default function PredatorDashboard() {
             showToast("🎤 Mic is ready - speak your next query!");
             return;
           }
-          
+
           // Ensure streaming ref is set to true before starting recognition
           streamingRef.current = true;
           startGoogleSttRecognition();
@@ -501,7 +501,7 @@ export default function PredatorDashboard() {
     // Trigger predator answer refresh
     setPredatorAnswerRefreshing(true);
     setTimeout(() => setPredatorAnswerRefreshing(false), 1000);
-    
+
     // Trigger coaching buttons refresh
     setCoachingButtonsRefreshing(true);
     setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
@@ -519,7 +519,7 @@ export default function PredatorDashboard() {
     const speed = endTime - startTime;
     setResponseSpeed(speed);
     setIsProcessingFast(false);
-    
+
     // Show speed feedback
     if (speed < 3000) {
       showToast(`⚡ Ultra-fast response: ${speed}ms`);
@@ -583,7 +583,7 @@ export default function PredatorDashboard() {
           setVoice(firstId);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Handle mode changes - clear previous responses when mode switches
@@ -616,22 +616,22 @@ export default function PredatorDashboard() {
 
   const handleSubmitAsk = async () => {
     if (!askText.trim()) return;
-    
+
     // Check if TTS is currently playing
     if (isTtsPlaying) {
       showToast("Wait, AI is speaking. After completion we will start Ask GPT.");
       return;
     }
-    
+
     setIsAskGptProcessing(true);
     const speedTimer = startSpeedTimer();
     try {
       const { responseText } = await runGpt({ transcript: askText, mode, conversationHistory, language: language === "German" ? "de-DE" : "en-US" });
       setPredatorAnswer(responseText);
-      
+
       // Ensure we show conversation history view (not live transcript) when response arrives
       setShowLiveTranscript(false);
-      
+
       // Trigger refresh animation for new response
       if (responseText) {
         triggerRefreshAnimation();
@@ -639,7 +639,7 @@ export default function PredatorDashboard() {
         const suggestions = [{ id: 1, text: responseText, timestamp: Date.now() }];
         addConversationEntry(askText, responseText, suggestions);
       }
-      
+
       // Don't auto-play here - let the main response handling logic handle it
       // if (speechActive && responseText) {
       //   // Try to get TTS audio for the response (only first individual response)
@@ -689,26 +689,26 @@ export default function PredatorDashboard() {
   // Note: This is only used for manual/coaching button TTS, not for auto-response
   const speakText = async (text) => {
     if (!speechActive || !text) return;
-    
+
     // Stop mic input so we don't capture our own TTS
     stopAllInput();
     // Stop any currently playing audio/speech to avoid overlap
     stopAllAudio();
-    
+
     try {
       const ttsResult = await runTts({ text, voice: aiVoiceSelection, language: language === "German" ? "de-DE" : "en-US" });
       if (ttsResult.audioUrl) {
         const audio = new Audio(ttsResult.audioUrl);
         currentAudioRef.current = audio;
-        
+
         setIsTtsPlaying(true);
         isTtsPlayingRef.current = true;
-        
+
         audio.onplay = () => {
           setIsTtsPlaying(true);
           isTtsPlayingRef.current = true;
         };
-        audio.onended = () => { 
+        audio.onended = () => {
           setIsTtsPlaying(false);
           isTtsPlayingRef.current = false;
           currentAudioRef.current = null;
@@ -724,7 +724,7 @@ export default function PredatorDashboard() {
           // Restart microphone after TTS error
           restartMicrophone();
         };
-        
+
         audio.play().catch(e => {
           setIsTtsPlaying(false);
           isTtsPlayingRef.current = false;
@@ -745,33 +745,33 @@ export default function PredatorDashboard() {
 
   // Google STT speech recognition setup
   const startGoogleSttRecognition = () => {
-    
+
     // Reset manual stop flag when explicitly starting recognition
     manuallyStoppedRef.current = false;
-    
+
     // Prevent duplicate starts if STT loop is already running
     if (sttRunningRef.current) {
       return;
     }
-    
+
     // First, stop any existing recognition to prevent conflicts
     if (googleSttIntervalRef.current) {
       clearInterval(googleSttIntervalRef.current);
       googleSttIntervalRef.current = null;
     }
-    
+
     // Clear any existing heartbeat timer
     if (heartbeatTimerRef.current) {
       clearInterval(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
     }
-    
+
     // Start Google STT recognition
     setStreaming(true);
     streamingRef.current = true;
     manuallyStoppedRef.current = false;
     setIsVoiceActive(true);
-    
+
     // Start heartbeat mechanism to ensure continuous listening
     heartbeatTimerRef.current = setInterval(() => {
       if (!manuallyStoppedRef.current && streamingRef.current) {
@@ -781,17 +781,17 @@ export default function PredatorDashboard() {
         }
       }
     }, 1000); // Check every 1 second
-    
+
     if (!isTtsPlaying && !isTtsPlayingRef.current && !currentAudioRef.current) {
     } else {
     }
-    
+
     setTranscript("");
     showToast("🎤 Google STT is listening - speak anytime! (Response stays visible until you speak)");
-    
+
     // Note: WebSocket connection will be established when speech is detected
     // to avoid Google Cloud Speech timeout errors (requires immediate audio after ready)
-    
+
     // Start continuous Google STT processing
     startContinuousGoogleStt();
   };
@@ -801,13 +801,13 @@ export default function PredatorDashboard() {
     try {
       // Close any existing socket
       if (sttWsRef.current) {
-        try { sttWsRef.current.close(); } catch (_) {}
+        try { sttWsRef.current.close(); } catch (_) { }
         sttWsRef.current = null;
       }
       sttWsReadyRef.current = false;
-       // Convert http/https to ws/wss for WebSocket
+      // Convert http/https to ws/wss for WebSocket
       const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7000';
-      const wsBase = apiBase.startsWith('https://') 
+      const wsBase = apiBase.startsWith('https://')
         ? apiBase.replace(/^https/, 'wss')
         : apiBase.replace(/^http/, 'ws');
       const params = new URLSearchParams({
@@ -819,35 +819,62 @@ export default function PredatorDashboard() {
       const ws = new WebSocket(`${wsBase}/ws/voice/stt?${params.toString()}`);
       sttWsRef.current = ws;
       ws.binaryType = 'arraybuffer';
-      
+
       console.log('🎤 FRONTEND: WebSocket STT connecting...', { wsUrl: `${wsBase}/ws/voice/stt`, params });
-      
+
       ws.onopen = () => {
-        sttWsReadyRef.current = false; // wait for server 'ready'
-        console.log('🎤 FRONTEND: WebSocket STT opened, waiting for ready...');
+        sttWsReadyRef.current = false;
+        console.log('🎤 FRONTEND: WebSocket STT opened, sending config...');
+
+        // 🧠 STEP 1: Send initial configuration message
+        const configMessage = {
+          type: 'config',
+          streamingConfig: {
+            config: {
+              encoding: 'WEBM_OPUS', // or your chosen MIME type
+              sampleRateHertz: 48000,
+              languageCode: 'en-US',
+            },
+            interimResults: true,
+          },
+        };
+
+        ws.send(JSON.stringify(configMessage));
+        console.log('🎤 FRONTEND: Config message sent, waiting for ready...');
       };
+
+      // 📨 Handle messages from backend
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
           if (data.type === 'ready') {
             sttWsReadyRef.current = true;
             console.log('🎤 FRONTEND: WebSocket STT ready, can send audio');
             return;
-          } else if (data.type === 'transcript') {
+          }
+
+          if (data.type === 'transcript') {
             const t = (data.transcript || '').trim();
             if (t) {
-              latestWsTranscriptRef.current = t; // capture latest from WS immediately
+              latestWsTranscriptRef.current = t;
               setCurrentUserInput(t);
               rebuildLiveTranscriptWithQuery(conversationHistory, t);
               console.log('🎤 FRONTEND: Live transcript received:', t, 'isFinal:', data.isFinal);
             }
-          } else if (data.type === 'error') {
-            console.error('🎤 FRONTEND: WebSocket STT error:', data.message);
+            return;
           }
+
+          if (data.type === 'error') {
+            console.error('🎤 FRONTEND: WebSocket STT error:', data.message);
+            return;
+          }
+
         } catch (e) {
           console.error('🎤 FRONTEND: WebSocket parse error:', e);
         }
       };
+
       ws.onerror = (error) => {
         console.error('🎤 FRONTEND: WebSocket STT connection error:', error);
       };
@@ -864,10 +891,10 @@ export default function PredatorDashboard() {
   const stopWsStreamingStt = () => {
     try {
       if (sttWsRef.current) {
-        try { sttWsRef.current.send(JSON.stringify({ type: 'end' })); } catch (_) {}
+        try { sttWsRef.current.send(JSON.stringify({ type: 'end' })); } catch (_) { }
         sttWsRef.current.close();
       }
-    } catch (_) {}
+    } catch (_) { }
     sttWsRef.current = null;
     sttWsReadyRef.current = false;
   };
@@ -878,22 +905,22 @@ export default function PredatorDashboard() {
       return;
     }
     sttRunningRef.current = true;
-    
+
     // Record audio continuously and process with Google STT
     const recordAndProcess = async () => {
       try {
         console.log('🎤 FRONTEND: Requesting microphone access...');
         // Get microphone access - force mono (1 channel) for Google STT compatibility
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1, // Force mono - Google STT requires mono for WEBM_OPUS
             echoCancellation: true,
             noiseSuppression: true,
             sampleRate: 48000
-          } 
+          }
         });
         console.log('🎤 FRONTEND: Microphone access granted, stream active:', stream.active);
-        
+
         // Choose MIME type
         let mimeType = '';
         if (typeof MediaRecorder !== 'undefined') {
@@ -913,19 +940,19 @@ export default function PredatorDashboard() {
         }
         mimeTypeRef.current = mimeType || 'audio/webm';
         console.log('🎤 FRONTEND: MIME type selected:', mimeTypeRef.current, 'encoding:', encodingRef.current);
-        
+
         const mediaRecorder = new MediaRecorder(stream, mimeTypeRef.current ? { mimeType: mimeTypeRef.current } : undefined);
         const recordedChunks = [];
         let processedSpeech = false; // Track if speech was actually processed
         let isProcessingInOnstop = false; // Prevent duplicate onstop processing
         let streamingInProgress = false; // Track streaming state
         let currentSessionTranscript = ""; // Track transcript for current recording session
-        
+
+        // 🎧 Step 2: Send audio chunks only after "ready"
         mediaRecorder.ondataavailable = async (e) => {
           if (e.data && e.data.size > 0) {
             recordedChunks.push(e.data);
-            
-            // Send chunk immediately only if WebSocket is ready (real-time streaming)
+
             if (sttWsRef.current && sttWsReadyRef.current) {
               try {
                 const arrayBuffer = await e.data.arrayBuffer();
@@ -933,11 +960,12 @@ export default function PredatorDashboard() {
               } catch (err) {
                 console.error('🎤 FRONTEND: Failed to send audio chunk:', err);
               }
+            } else {
+              console.warn('🎤 FRONTEND: Skipping chunk, STT not ready yet');
             }
-            // If WebSocket not ready, skip the chunk (no buffering)
           }
         };
-        
+
         mediaRecorder.onstop = async () => {
           console.log('🎤 FRONTEND: MediaRecorder stopped');
           // Prevent duplicate onstop calls - MediaRecorder can fire onstop multiple times
@@ -945,40 +973,40 @@ export default function PredatorDashboard() {
             console.log('🎤 FRONTEND: Already processing or processed, skipping');
             return;
           }
-          
+
           isProcessingInOnstop = true; // Mark as processing
-          
+
           try {
             // Prevent duplicate processing - if already processed, skip
             if (processedSpeech) {
               isProcessingInOnstop = false;
               return;
             }
-            
+
             // Only process if we actually detected speech
             if (!speechDetected) {
               console.log('🎤 FRONTEND: No speech detected, skipping processing');
               processedSpeech = true; // Mark as processed to allow next iteration
               return;
             }
-            
+
             // Don't process speech input if AI is currently speaking
             if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
               console.log('🎤 FRONTEND: TTS playing, skipping processing');
               processedSpeech = true;
               return;
             }
-            
+
             // Mark as processing to prevent duplicate calls
             processedSpeech = true;
-            
+
             // Check if we have any transcript before processing
             if (!latestWsTranscriptRef.current || !latestWsTranscriptRef.current.trim()) {
               console.log('🎤 FRONTEND: No transcript available, skipping processing');
               isProcessingInOnstop = false; // Reset flag before returning
               return;
             }
-            
+
             console.log('🎤 FRONTEND: Starting voice pipeline with transcript:', latestWsTranscriptRef.current);
             // Process with complete pipeline (GPT -> TTS) using live transcript
             // Use live transcript from WebSocket STT instead of re-processing audio
@@ -991,11 +1019,11 @@ export default function PredatorDashboard() {
                 conversationHistory,
                 transcript: latestWsTranscriptRef.current // Use latest WS transcript
               });
-              console.log('🎤 FRONTEND: Pipeline result received:', { 
+              console.log('🎤 FRONTEND: Pipeline result received:', {
                 hasTranscript: !!pipelineResult.transcript,
                 hasResponseText: !!pipelineResult.responseText,
                 hasAudioUrl: !!pipelineResult.audioUrl,
-                keyHighlights: pipelineResult.keyHighlights 
+                keyHighlights: pipelineResult.keyHighlights
               });
             } catch (pipelineError) {
               console.error('🎤 FRONTEND: Pipeline error:', pipelineError);
@@ -1005,9 +1033,9 @@ export default function PredatorDashboard() {
               processedSpeech = true;
               return; // Stop processing and don't add to history
             }
-            
+
             const { transcript, responseText, audioUrl, keyHighlights, sentimentData, error, message } = pipelineResult || {};
-            
+
             // Handle server-side error response
             if (error || message) {
               showToast(`⚠️ ${message || error || "Voice processing failed"}`);
@@ -1015,25 +1043,25 @@ export default function PredatorDashboard() {
               processedSpeech = true;
               return; // Don't process error as transcript
             }
-            
+
             // Skip if no transcript at all
             if (!transcript || !transcript.trim()) {
               isProcessingInOnstop = false; // Reset flag
               processedSpeech = true;
               return;
             }
-            
+
             if (transcript && transcript.trim()) {
-              
+
               // Skip processing if this is an error message or empty detection (prevents infinite loop)
               const isErrorTranscript = transcript.includes("Google Cloud Speech-to-Text is not configured") ||
-                                       transcript.includes("AI response generation failed") ||
-                                       transcript.toLowerCase().includes("error") ||
-                                       transcript.toLowerCase().includes("failed") ||
-                                       transcript.toLowerCase().includes("no speech detected") ||
-                                       transcript.toLowerCase().trim() === "" ||
-                                       !speechDetected; // Don't process if no speech was detected
-              
+                transcript.includes("AI response generation failed") ||
+                transcript.toLowerCase().includes("error") ||
+                transcript.toLowerCase().includes("failed") ||
+                transcript.toLowerCase().includes("no speech detected") ||
+                transcript.toLowerCase().trim() === "" ||
+                !speechDetected; // Don't process if no speech was detected
+
               if (isErrorTranscript) {
                 if (!transcript.toLowerCase().includes("no speech detected")) {
                   showToast("⚠️ Pipeline processing issue");
@@ -1042,7 +1070,7 @@ export default function PredatorDashboard() {
                 processedSpeech = true;
                 return; // Don't process or add to history
               }
-              
+
               // Update with final transcript - show actual text in live transcript
               setCurrentUserInput(transcript.trim());
               setTranscript(transcript);
@@ -1058,7 +1086,7 @@ export default function PredatorDashboard() {
                 setKeyHighlights({});
               }
               rebuildLiveTranscriptWithQuery(conversationHistory, transcript, sentimentData);
-              
+
               // Process response from pipeline
               if (responseText && responseText.trim()) {
                 const speedTimer = startSpeedTimer();
@@ -1069,15 +1097,15 @@ export default function PredatorDashboard() {
                   // Show processing status (without sentiment emoji during processing)
                   rebuildLiveTranscriptWithQuery(conversationHistory, `🔄 Processing: ${transcript.trim()}`, null);
                   setCurrentUserInput("");
-                  
+
                   // Parse response based on current mode (same logic as before)
                   let suggestions = [];
-                  
+
                   if (modeRef.current === "sales") {
                     if (responseText.includes("Response A:") && responseText.includes("Response B:") && responseText.includes("Response C:")) {
                       const questionBlocks = responseText.split(/\n\s*\n/).filter(block => block.trim());
                       const responsesByType = { A: [], B: [], C: [] };
-                      
+
                       questionBlocks.forEach((block) => {
                         const lines = block.split('\n').filter(line => line.trim());
                         lines.forEach((line) => {
@@ -1090,14 +1118,14 @@ export default function PredatorDashboard() {
                           }
                         });
                       });
-                      
+
                       suggestions = [];
                       ['A', 'B', 'C'].forEach(type => {
                         if (responsesByType[type].length > 0) {
                           const combinedText = responsesByType[type]
                             .map(item => item.responseText)
                             .join('\n\n');
-                          
+
                           suggestions.push({
                             id: suggestions.length + 1,
                             text: combinedText,
@@ -1135,7 +1163,7 @@ export default function PredatorDashboard() {
                       timestamp: Date.now()
                     }];
                   }
-                  
+
                   if (suggestions.length > 0) {
                     setCoachingSuggestions(suggestions);
                     setShowLiveTranscript(true);
@@ -1143,56 +1171,56 @@ export default function PredatorDashboard() {
                     setCoachingButtonsRefreshing(true);
                     setTimeout(() => setCoachingButtonsRefreshing(false), 1000);
                     setTimeout(() => setShowCoachingButtons(true), 3000);
-                    
+
                     // For sales mode: find Response A, for support mode: use first suggestion
                     const responseA = suggestions.find(s => s.responseType === 'A');
-                    const predatorAnswerText = responseA 
-                      ? responseA.text 
+                    const predatorAnswerText = responseA
+                      ? responseA.text
                       : (suggestions[0]?.text || responseText.trim() || "No response found");
                     setPredatorAnswer(predatorAnswerText);
-                    
+
                     triggerRefreshAnimation();
-                    
+
                     // Add to conversation history - this will automatically rebuild live transcript
                     addConversationEntry(transcript, predatorAnswerText, suggestions, sentimentData);
-                    
+
                     // Ensure live transcript shows after state update
                     setTimeout(() => {
                       setShowLiveTranscript(true);
                     }, 200);
-                    
+
                     // Only process CRM for sales mode
                     if (mode === "sales") {
                       processCustomerInfo(transcript);
                     } else {
                     }
-                    
+
                     // Clear processing state IMMEDIATELY after response parsing
                     // This allows mic to be ready for next input while TTS plays
                     setIsProcessing(false);
                     isProcessingRef.current = false;
-                    
+
                     // Auto-play ONLY Response A TTS from pipeline (single audio, no fallback)
                     if (speechActive && !userSelectingResponse && audioUrl) {
-                      
+
                       // Stop audio playback only - don't stop mic input (WebSocket stays open)
                       // Mic input is already stopped by silence detection, so just stop any playing audio
                       stopAllAudio();
                       // Note: NOT calling stopAllInput() here - we want mic to resume after TTS
-                      
+
                       // Create single audio instance
                       const audio = new Audio(audioUrl);
                       currentAudioRef.current = audio;
-                      
+
                       setIsTtsPlaying(true);
                       isTtsPlayingRef.current = true;
-                      
+
                       audio.onplay = () => {
                         setIsTtsPlaying(true);
                         isTtsPlayingRef.current = true;
                       };
-                      
-                      audio.onended = () => { 
+
+                      audio.onended = () => {
                         setIsTtsPlaying(false);
                         isTtsPlayingRef.current = false;
                         currentAudioRef.current = null;
@@ -1200,14 +1228,14 @@ export default function PredatorDashboard() {
                         setMicReactivated(true);
                         setTimeout(() => setMicReactivated(false), 2000);
                       };
-                      
+
                       audio.onerror = () => {
                         setIsTtsPlaying(false);
                         isTtsPlayingRef.current = false;
                         currentAudioRef.current = null;
                         restartMicrophone();
                       };
-                      
+
                       // Play single audio only
                       audio.play().catch((e) => {
                         setIsTtsPlaying(false);
@@ -1246,7 +1274,7 @@ export default function PredatorDashboard() {
             isProcessingInOnstop = false; // Reset processing flag
           }
         };
-        
+
         // Wait for speech to be detected before starting recording
         let lastAudioTime = Date.now();
         let speechDetected = false;
@@ -1254,7 +1282,7 @@ export default function PredatorDashboard() {
         let isRecording = false;
         let lastLogTime = 0;
         const LOG_INTERVAL = 2000; // Log every 2 seconds to reduce spam
-        
+
         // Create audio context to analyze volume
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const analyser = audioContext.createAnalyser();
@@ -1262,20 +1290,20 @@ export default function PredatorDashboard() {
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
-        
+
         // Function to check for speech detection and silence
         const checkSpeechAndSilence = () => {
           if (silenceDetected || !streamingRef.current) return;
-          
+
           // Don't start new recording if processing is in progress
           if (isProcessingRef.current) {
             requestAnimationFrame(checkSpeechAndSilence);
             return;
           }
-          
+
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          
+
           // Detect speech (lower threshold to catch softer speech - reduced from 35 to 28 for better sensitivity)
           if (average > 28 && !speechDetected && !isRecording) {
             speechDetected = true;
@@ -1285,11 +1313,11 @@ export default function PredatorDashboard() {
             setCurrentUserInput("");
             accumulatedTranscriptRef.current = ""; // Reset accumulated transcript
             latestWsTranscriptRef.current = ""; // Reset session transcript
-            
+
             // Start recording IMMEDIATELY to capture audio right away
             // This ensures audio chunks are ready when WebSocket connects
             mediaRecorder.start(100); // Use smaller timeslice (100ms) for faster initial chunks
-            
+
             // Start WS-based live word-by-word transcription
             // Start connection right when speech is detected to avoid timeout
             if (!sttWsRef.current || !sttWsReadyRef.current) {
@@ -1297,7 +1325,7 @@ export default function PredatorDashboard() {
             } else {
             }
           }
-          
+
           // If already recording, track audio and silence
           if (isRecording) {
             // If audio is detected, update last audio time
@@ -1331,7 +1359,7 @@ export default function PredatorDashboard() {
               }
             }
           }
-          
+
           // Continue checking if still active
           if (!silenceDetected && streamingRef.current) {
             requestAnimationFrame(checkSpeechAndSilence);
@@ -1340,12 +1368,12 @@ export default function PredatorDashboard() {
 
         // Start checking for speech
         setTimeout(() => checkSpeechAndSilence(), 100);
-        
+
         // Track completion state
         let completed = false;
-        
+
         // Note: No time limits - recording stops naturally after 2 seconds of silence only
-        
+
         // Wait for onstop to complete or timeout
         await new Promise((resolve) => {
           const checkComplete = () => {
@@ -1357,12 +1385,12 @@ export default function PredatorDashboard() {
           };
           checkComplete();
         });
-        
+
       } catch (error) {
         showToast("Microphone permission denied");
       }
     };
-    
+
     // Single recording session (no continuous loop)
     const recordingLoop = async () => {
       while (!manuallyStoppedRef.current && streamingRef.current) {
@@ -1379,7 +1407,7 @@ export default function PredatorDashboard() {
             setIsProcessing(false);
             isProcessingRef.current = false;
           }
-          
+
           await recordAndProcess();
           // No delay - voice assistant should be immediately ready for next input
           // Recording loop will immediately call recordAndProcess() again
@@ -1390,7 +1418,7 @@ export default function PredatorDashboard() {
       }
       sttRunningRef.current = false;
     };
-    
+
     // Start the recording loop
     recordingLoop();
   };
@@ -1400,11 +1428,11 @@ export default function PredatorDashboard() {
     manuallyStoppedRef.current = true; // Set flag to prevent auto-restart
     streamingRef.current = false; // Also set ref to false
     sttRunningRef.current = false; // Reset STT running flag to allow restart
-    
+
     // Stop all audio playback and input immediately
     stopAllAudio();
     stopAllInput();
-    
+
     if (processingTimeoutRef.current) {
       clearTimeout(processingTimeoutRef.current);
     }
@@ -1437,7 +1465,7 @@ export default function PredatorDashboard() {
   const selectCoachingSuggestion = async (suggestion) => {
     setUserSelectingResponse(true); // Prevent main response logic from auto-playing
     setPredatorAnswer(suggestion.text);
-    
+
     // Only update Predator Answer box, don't add to conversation history
     // Play audio for all responses when clicked (A, B, C)
     if (speechActive) {
@@ -1449,34 +1477,34 @@ export default function PredatorDashboard() {
           stopAllAudio();
           const audio = new Audio(ttsResult.audioUrl);
           currentAudioRef.current = audio;
-          
+
           // Set TTS playing state immediately
           setIsTtsPlaying(true);
           isTtsPlayingRef.current = true;
-          
+
           // Add event listeners before playing
           audio.addEventListener('play', () => {
             setIsTtsPlaying(true);
             isTtsPlayingRef.current = true;
           });
-          
+
           audio.addEventListener('ended', () => {
             setIsTtsPlaying(false);
             isTtsPlayingRef.current = false;
           });
-          
+
           audio.onplay = () => {
             setIsTtsPlaying(true);
             isTtsPlayingRef.current = true;
           };
-                        audio.onended = () => { 
-                          setIsTtsPlaying(false);
-                          isTtsPlayingRef.current = false;
-                          currentAudioRef.current = null;
-                          setUserSelectingResponse(false); // Reset flag after TTS ends
-                          // Restart microphone after AI speech ends
-                          restartMicrophone(); 
-                        };
+          audio.onended = () => {
+            setIsTtsPlaying(false);
+            isTtsPlayingRef.current = false;
+            currentAudioRef.current = null;
+            setUserSelectingResponse(false); // Reset flag after TTS ends
+            // Restart microphone after AI speech ends
+            restartMicrophone();
+          };
           audio.play().catch(async (e) => {
             await speakText(suggestion.text);
           });
@@ -1487,7 +1515,7 @@ export default function PredatorDashboard() {
         await speakText(suggestion.text);
       }
     }
-    
+
     triggerConfetti();
     showToast("Suggestion selected");
   };
@@ -1502,18 +1530,18 @@ export default function PredatorDashboard() {
         rel="stylesheet"
       />
       {showConfetti && <Confetti recycle={false} numberOfPieces={150} />}
-      
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 border border-[#000000] rounded-2xl px-4 py-3 bg-[#f5f5f5] shadow-lg">
         <div className="flex items-center gap-3">
           <span className="font-bold text-lg sm:text-xl text-center sm:text-left" style={orbitronStyle}>
             SELL PREDATOR Cockpit
           </span>
-          
+
         </div>
 
         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 mt-3 sm:mt-0 w-full sm:w-auto">
-          <button 
+          <button
             onClick={() => navigate("/profile")}
             className="cursor-pointer bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-2.5 rounded-xl shadow-lg hover:shadow-xl font-semibold w-full sm:w-auto transition-all duration-300 flex items-center justify-center gap-2"
           >
@@ -1522,7 +1550,7 @@ export default function PredatorDashboard() {
             </svg>
             Profile
           </button>
-          <button 
+          <button
             onClick={handleLogout}
             className="cursor-pointer bg-gradient-to-r from-[#FFD700] to-yellow-500 hover:from-yellow-400 hover:to-yellow-600 text-[#000000] px-6 py-2.5 rounded-xl shadow-lg hover:shadow-xl font-semibold w-full sm:w-auto transition-all duration-300 flex items-center justify-center gap-2"
           >
@@ -1630,7 +1658,7 @@ export default function PredatorDashboard() {
             ) : (
               /* Conversation History View from localStorage */
               <>
-                    {conversationHistory.length > 0 && (
+                {conversationHistory.length > 0 && (
                   <div className="space-y-4">
                     <div className="text-xs text-gray-500 mb-2 font-semibold">
                       {mode === 'sales' ? '📈 Sales Mode History' : '🛠️ Support Mode History'}
@@ -1648,7 +1676,7 @@ export default function PredatorDashboard() {
                             </div>
                             <div className="text-xs text-gray-500 mt-2">{entry.timestamp}</div>
                           </div>
-                          
+
                           {/* Predator AI Response A (default response) */}
                           {entry.predatorResponse && entry.predatorResponse.trim() && (
                             <div className="p-3 mb-2 bg-blue-50 rounded-lg">
@@ -1661,7 +1689,7 @@ export default function PredatorDashboard() {
                     })}
                   </div>
                 )}
-                
+
                 {/* Placeholder when no conversation */}
                 {conversationHistory.length === 0 && (
                   <div className="text-gray-500 text-sm text-center py-8">
@@ -1715,11 +1743,10 @@ export default function PredatorDashboard() {
                 </div>
               )}
               {responseSpeed && (
-                <div className={`text-xs font-semibold px-2 py-1 rounded ${
-                  responseSpeed < 3000 ? 'bg-green-100 text-green-700' : 
-                  responseSpeed < 5000 ? 'bg-yellow-100 text-yellow-700' : 
-                  'bg-red-100 text-red-700'
-                }`}>
+                <div className={`text-xs font-semibold px-2 py-1 rounded ${responseSpeed < 3000 ? 'bg-green-100 text-green-700' :
+                  responseSpeed < 5000 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
                   {responseSpeed}ms
                 </div>
               )}
@@ -1733,11 +1760,10 @@ export default function PredatorDashboard() {
               )}
             </div>
           </div>
-          
+
           {/* Current Response Display */}
-          <div className={`w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm overflow-y-auto mb-3 max-h-[70vh] ${
-            predatorAnswerRefreshing ? 'animate-pulse bg-yellow-50 border-yellow-400 shadow-lg' : ''
-          }`}>
+          <div className={`w-full flex-1 border-2 border-[#D72638] rounded-2xl p-3 shadow-sm overflow-y-auto mb-3 max-h-[70vh] ${predatorAnswerRefreshing ? 'animate-pulse bg-yellow-50 border-yellow-400 shadow-lg' : ''
+            }`}>
             {predatorAnswer ? (
               <div className="p-3">
                 <div className="text-sm font-semibold mb-2">Current Response:</div>
@@ -1765,18 +1791,17 @@ export default function PredatorDashboard() {
               // Check if this is a combined response from multiple questions
               if (suggestion.isCombinedResponse) {
                 return (
-                <button
+                  <button
                     key={suggestion.id}
-                  className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
-                      coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
-                    }`}
+                    className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
+                      }`}
                     onClick={() => selectCoachingSuggestion(suggestion)}
                   >
                     Good Answer {suggestion.responseType}
                   </button>
                 );
               }
-              
+
               // Check if this is a question header (fallback for other formats)
               if (suggestion.isQuestionHeader) {
                 return (
@@ -1787,20 +1812,19 @@ export default function PredatorDashboard() {
                   </div>
                 );
               }
-              
+
               // Regular response button (fallback for single question format)
-              const responseLabel = suggestion.responseType 
-                ? `Good Answer ${suggestion.responseType}` 
-                : mode === "sales" 
-                  ? `Good Answer ${String.fromCharCode(65 + index)}` 
+              const responseLabel = suggestion.responseType
+                ? `Good Answer ${suggestion.responseType}`
+                : mode === "sales"
+                  ? `Good Answer ${String.fromCharCode(65 + index)}`
                   : "Support Response";
-              
+
               return (
                 <button
                   key={suggestion.id}
-                  className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${
-                    coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
-                  }`}
+                  className={`cursor-pointer bg-[#FFD700] hover:bg-[#FFD700] px-4 py-2 rounded-lg shadow flex-1 font-medium transition-all duration-500 text-center ${coachingButtonsRefreshing ? 'animate-pulse bg-yellow-400 shadow-lg transform scale-105' : ''
+                    }`}
                   onClick={() => selectCoachingSuggestion(suggestion)}
                 >
                   {responseLabel}
@@ -1850,16 +1874,14 @@ export default function PredatorDashboard() {
           value={askText}
           onChange={(e) => setAskText(e.target.value)}
           disabled={isAskGptProcessing}
-          className={`flex-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none ${
-            isAskGptProcessing ? 'bg-gray-200 cursor-not-allowed' : ''
-          }`}
+          className={`flex-1 border rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-[#FFD700] outline-none ${isAskGptProcessing ? 'bg-gray-200 cursor-not-allowed' : ''
+            }`}
         />
         <button
-          className={`cursor-pointer px-5 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto ${
-            isAskGptProcessing 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-[#FFD700] hover:bg-[#FFD700]'
-          }`}
+          className={`cursor-pointer px-5 py-1.5 rounded-lg shadow font-medium w-full sm:w-auto ${isAskGptProcessing
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : 'bg-[#FFD700] hover:bg-[#FFD700]'
+            }`}
           onClick={handleSubmitAsk}
           disabled={isAskGptProcessing}
         >
@@ -1886,7 +1908,7 @@ export default function PredatorDashboard() {
       `}</style>
 
       {/* CRM Sidebar */}
-      <CRMSidebar 
+      <CRMSidebar
         isVisible={crmSidebarVisible}
         customerData={customerData}
         isLoading={crmLoading}
