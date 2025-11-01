@@ -1,7 +1,7 @@
 // Use environment variable for API base URL with fallback to localhost
-//const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-const API_BASE ="http://localhost:7000";
+//const API_BASE ="http://localhost:7000";
 
 // --- Helper: JSON POST without caching ---
 async function postJson(path, body) {
