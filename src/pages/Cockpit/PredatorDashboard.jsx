@@ -817,14 +817,19 @@ export default function PredatorDashboard() {
       const ws = new WebSocket(`${wsBase}/ws/voice/stt?${params.toString()}`);
       sttWsRef.current = ws;
       ws.binaryType = 'arraybuffer';
+      
+      console.log('🎤 FRONTEND: WebSocket STT connecting...', { wsUrl: `${wsBase}/ws/voice/stt`, params });
+      
       ws.onopen = () => {
         sttWsReadyRef.current = false; // wait for server 'ready'
+        console.log('🎤 FRONTEND: WebSocket STT opened, waiting for ready...');
       };
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'ready') {
             sttWsReadyRef.current = true;
+            console.log('🎤 FRONTEND: WebSocket STT ready, can send audio');
             return;
           } else if (data.type === 'transcript') {
             const t = (data.transcript || '').trim();
@@ -832,19 +837,25 @@ export default function PredatorDashboard() {
               latestWsTranscriptRef.current = t; // capture latest from WS immediately
               setCurrentUserInput(t);
               rebuildLiveTranscriptWithQuery(conversationHistory, t);
+              console.log('🎤 FRONTEND: Live transcript received:', t, 'isFinal:', data.isFinal);
             }
           } else if (data.type === 'error') {
+            console.error('🎤 FRONTEND: WebSocket STT error:', data.message);
           }
         } catch (e) {
+          console.error('🎤 FRONTEND: WebSocket parse error:', e);
         }
       };
-      ws.onerror = () => {
+      ws.onerror = (error) => {
+        console.error('🎤 FRONTEND: WebSocket STT connection error:', error);
       };
       ws.onclose = () => {
         sttWsReadyRef.current = false;
         sttWsRef.current = null;
+        console.log('🎤 FRONTEND: WebSocket STT closed');
       };
     } catch (e) {
+      console.error('🎤 FRONTEND: WebSocket STT setup error:', e);
     }
   };
 
@@ -869,6 +880,7 @@ export default function PredatorDashboard() {
     // Record audio continuously and process with Google STT
     const recordAndProcess = async () => {
       try {
+        console.log('🎤 FRONTEND: Requesting microphone access...');
         // Get microphone access
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
@@ -877,6 +889,7 @@ export default function PredatorDashboard() {
             sampleRate: 48000
           } 
         });
+        console.log('🎤 FRONTEND: Microphone access granted, stream active:', stream.active);
         
         // Choose MIME type
         let mimeType = '';
@@ -896,6 +909,7 @@ export default function PredatorDashboard() {
           }
         }
         mimeTypeRef.current = mimeType || 'audio/webm';
+        console.log('🎤 FRONTEND: MIME type selected:', mimeTypeRef.current, 'encoding:', encodingRef.current);
         
         const mediaRecorder = new MediaRecorder(stream, mimeTypeRef.current ? { mimeType: mimeTypeRef.current } : undefined);
         const recordedChunks = [];
@@ -914,6 +928,7 @@ export default function PredatorDashboard() {
                 const arrayBuffer = await e.data.arrayBuffer();
                 sttWsRef.current.send(arrayBuffer);
               } catch (err) {
+                console.error('🎤 FRONTEND: Failed to send audio chunk:', err);
               }
             }
             // If WebSocket not ready, skip the chunk (no buffering)
@@ -921,8 +936,10 @@ export default function PredatorDashboard() {
         };
         
         mediaRecorder.onstop = async () => {
+          console.log('🎤 FRONTEND: MediaRecorder stopped');
           // Prevent duplicate onstop calls - MediaRecorder can fire onstop multiple times
           if (isProcessingInOnstop || processedSpeech) {
+            console.log('🎤 FRONTEND: Already processing or processed, skipping');
             return;
           }
           
@@ -937,12 +954,14 @@ export default function PredatorDashboard() {
             
             // Only process if we actually detected speech
             if (!speechDetected) {
+              console.log('🎤 FRONTEND: No speech detected, skipping processing');
               processedSpeech = true; // Mark as processed to allow next iteration
               return;
             }
             
             // Don't process speech input if AI is currently speaking
             if (isTtsPlaying || isTtsPlayingRef.current || currentAudioRef.current) {
+              console.log('🎤 FRONTEND: TTS playing, skipping processing');
               processedSpeech = true;
               return;
             }
@@ -952,10 +971,12 @@ export default function PredatorDashboard() {
             
             // Check if we have any transcript before processing
             if (!latestWsTranscriptRef.current || !latestWsTranscriptRef.current.trim()) {
+              console.log('🎤 FRONTEND: No transcript available, skipping processing');
               isProcessingInOnstop = false; // Reset flag before returning
               return;
             }
             
+            console.log('🎤 FRONTEND: Starting voice pipeline with transcript:', latestWsTranscriptRef.current);
             // Process with complete pipeline (GPT -> TTS) using live transcript
             // Use live transcript from WebSocket STT instead of re-processing audio
             let pipelineResult;
@@ -967,7 +988,14 @@ export default function PredatorDashboard() {
                 conversationHistory,
                 transcript: latestWsTranscriptRef.current // Use latest WS transcript
               });
+              console.log('🎤 FRONTEND: Pipeline result received:', { 
+                hasTranscript: !!pipelineResult.transcript,
+                hasResponseText: !!pipelineResult.responseText,
+                hasAudioUrl: !!pipelineResult.audioUrl,
+                keyHighlights: pipelineResult.keyHighlights 
+              });
             } catch (pipelineError) {
+              console.error('🎤 FRONTEND: Pipeline error:', pipelineError);
               showToast("⚠️ Voice pipeline error - Check Google Cloud STT configuration");
               // Reset flag before returning
               isProcessingInOnstop = false;
