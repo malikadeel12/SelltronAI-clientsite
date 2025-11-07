@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { saveKeyHighlightsToHubSpot, saveSentimentToHubSpot } from '../lib/api.js';
+import React, { useState, useEffect, memo } from 'react';
+import { saveKeyHighlightsToHubSpot, saveSentimentToHubSpot, getKeyHighlightsFromHubSpot } from '../lib/api.js';
 
 const orbitronStyle = {
   fontFamily: "'Orbitron', sans-serif",
@@ -9,10 +9,11 @@ const openSansStyle = {
   fontFamily: "'Open Sans', sans-serif",
 };
 
-const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, sentimentData = null }) => {
+const CRMSidebar = memo(({ customerData, isLoading, isVisible, keyHighlights = {}, sentimentData = null }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [highlightsSaved, setHighlightsSaved] = useState(false);
   const [sentimentSaved, setSentimentSaved] = useState(false);
+  const [allKeyHighlights, setAllKeyHighlights] = useState({}); // All highlights (previous + current)
 
   // Auto-save key highlights to HubSpot when they are displayed
   useEffect(() => {
@@ -77,6 +78,67 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
     saveSentimentToHubSpotFunc();
   }, [customerData?.email, sentimentData, sentimentSaved, isLoading]);
 
+  // Fetch previous key highlights from HubSpot when customer is found
+  useEffect(() => {
+    const fetchPreviousHighlights = async () => {
+      const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+      
+      if (email && !isLoading) {
+        try {
+          const previousHighlights = await getKeyHighlightsFromHubSpot(email);
+          // Merge previous highlights with current highlights (current takes precedence)
+          const mergedHighlights = {
+            ...previousHighlights,
+            ...keyHighlights // Current highlights override previous ones
+          };
+          setAllKeyHighlights(mergedHighlights);
+        } catch (error) {
+          // If fetch fails, just use current highlights
+          setAllKeyHighlights(keyHighlights);
+        }
+      } else {
+        // No customer email, just use current highlights
+        setAllKeyHighlights(keyHighlights);
+      }
+    };
+
+    fetchPreviousHighlights();
+  }, [customerData?.email, isLoading, keyHighlights]); // Fetch when customer email changes or highlights update
+
+  // Update all highlights when current keyHighlights change (new query)
+  useEffect(() => {
+    const updateAllHighlights = async () => {
+      const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
+      
+      if (email && Object.keys(keyHighlights).length > 0) {
+        // Auto-fetch from HubSpot when new query comes (similar to auto-save)
+        try {
+          const previousHighlights = await getKeyHighlightsFromHubSpot(email);
+          // Merge previous highlights with current highlights (current takes precedence)
+          const mergedHighlights = {
+            ...previousHighlights,
+            ...keyHighlights
+          };
+          setAllKeyHighlights(mergedHighlights);
+        } catch (error) {
+          // If fetch fails, merge with what we have
+          setAllKeyHighlights(prev => ({
+            ...prev,
+            ...keyHighlights
+          }));
+        }
+      } else if (Object.keys(keyHighlights).length > 0) {
+        // No email but we have highlights, just add them
+        setAllKeyHighlights(prev => ({
+          ...prev,
+          ...keyHighlights
+        }));
+      }
+    };
+
+    updateAllHighlights();
+  }, [keyHighlights]); // Update when new key highlights come in
+
   // Reset highlights and sentiment saved flags when customer changes or new data arrives
   useEffect(() => {
     setHighlightsSaved(false);
@@ -114,6 +176,7 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&family=Open+Sans:wght@400;500;600&display=swap"
         rel="stylesheet"
       />
+      
       
       <div className={`fixed right-0 top-0 h-full bg-[#f5f5f5] shadow-2xl border-l border-[#FFD700] transform transition-all duration-300 ease-in-out z-40 ${isVisible ? 'translate-x-0' : 'translate-x-full'} ${isCollapsed ? 'w-12' : 'w-80'}`}>
         {/* Header */}
@@ -231,8 +294,8 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
               </div>
             </div>
 
-            {/* Key Highlights Section */}
-            {Object.keys(keyHighlights).length > 0 && (
+            {/* Key Highlights Section - Scrollable */}
+            {Object.keys(allKeyHighlights).length > 0 && (
               <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
                 <h4 className="font-medium text-[#000000] mb-3 flex items-center" style={orbitronStyle}>
                   <svg className="w-5 h-5 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,55 +303,55 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
                   </svg>
                   Key Highlights
                 </h4>
-                <div className="space-y-3">
-                  {keyHighlights.budget && (
-                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                <div className="max-h-64 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[#FFD700] scrollbar-track-transparent">
+                  {allKeyHighlights.budget && (
+                    <div key="budget" className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
                       <div className="flex items-start space-x-2">
                         <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                         </svg>
                         <div>
                           <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Budget:</span>
-                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.budget}</p>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{allKeyHighlights.budget}</p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {keyHighlights.timeline && (
-                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                  {allKeyHighlights.timeline && (
+                    <div key="timeline" className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
                       <div className="flex items-start space-x-2">
                         <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div>
                           <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Timeline:</span>
-                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.timeline}</p>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{allKeyHighlights.timeline}</p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {keyHighlights.objections && (
-                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                  {allKeyHighlights.objections && (
+                    <div key="objections" className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
                       <div className="flex items-start space-x-2">
                         <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div>
                           <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Objections:</span>
-                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.objections}</p>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{allKeyHighlights.objections}</p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {keyHighlights.importantInfo && (
-                    <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
+                  {allKeyHighlights.importantInfo && (
+                    <div key="importantInfo" className="bg-gradient-to-r from-[#FFD700]/10 to-[#FFD700]/5 rounded-lg p-3 border-l-4 border-[#FFD700]">
                       <div className="flex items-start space-x-2">
                         <svg className="w-4 h-4 text-[#FFD700] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div>
                           <span className="text-sm font-medium text-[#000000]" style={openSansStyle}>Important Info:</span>
-                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{keyHighlights.importantInfo}</p>
+                          <p className="text-sm text-[#666666] mt-1" style={openSansStyle}>{allKeyHighlights.importantInfo}</p>
                         </div>
                       </div>
                     </div>
@@ -299,7 +362,7 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
 
             {/* Light Sentiment (Traffic Light System) - Shown after Key Highlights */}
             {sentimentData && (
-              <div className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
+              <div key="sentiment" className="bg-[#ffffff] border border-[#FFD700] rounded-lg p-4">
                 <h4 className="font-medium text-[#000000] mb-3 flex items-center" style={orbitronStyle}>
                   <svg className="w-5 h-5 text-[#FFD700] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -377,6 +440,19 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
                           const email = customerData?.email || localStorage.getItem('crmCustomerEmail');
                           await saveKeyHighlightsToHubSpot(email, keyHighlights);
                           setHighlightsSaved(true);
+                          // Refresh highlights after saving
+                          if (email) {
+                            try {
+                              const previousHighlights = await getKeyHighlightsFromHubSpot(email);
+                              const mergedHighlights = {
+                                ...previousHighlights,
+                                ...keyHighlights
+                              };
+                              setAllKeyHighlights(mergedHighlights);
+                            } catch (error) {
+                              // Ignore refresh error
+                            }
+                          }
                         } catch (error) {
                         }
                       }}
@@ -441,7 +517,20 @@ const CRMSidebar = ({ customerData, isLoading, isVisible, keyHighlights = {}, se
     </div>
     </>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function: return true if props are equal (skip re-render)
+  // Compare keyHighlights and sentimentData by value, not reference
+  const keyHighlightsEqual = JSON.stringify(prevProps.keyHighlights) === JSON.stringify(nextProps.keyHighlights);
+  const sentimentEqual = JSON.stringify(prevProps.sentimentData) === JSON.stringify(nextProps.sentimentData);
+  const customerEqual = prevProps.customerData?.email === nextProps.customerData?.email;
+  const visibilityEqual = prevProps.isVisible === nextProps.isVisible;
+  const loadingEqual = prevProps.isLoading === nextProps.isLoading;
+  
+  // Return true if all props are equal (don't re-render), false otherwise (do re-render)
+  return keyHighlightsEqual && sentimentEqual && customerEqual && visibilityEqual && loadingEqual;
+});
+
+CRMSidebar.displayName = 'CRMSidebar';
 
 export default CRMSidebar;
 

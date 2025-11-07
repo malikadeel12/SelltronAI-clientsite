@@ -271,6 +271,23 @@ export async function extractKeyHighlights(transcript, conversationHistory = [])
   return res.json();
 }
 
+export async function getKeyHighlightsFromHubSpot(email) {
+  const fullUrl = `${API_BASE}/api/voice/crm/key-highlights/${encodeURIComponent(email)}`;
+  
+  const res = await fetch(fullUrl, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Request failed: ${res.status}`);
+  }
+  
+  const result = await res.json();
+  return result.keyHighlights || {};
+}
+
 export async function saveKeyHighlightsToHubSpot(email, keyHighlights) {
   const fullUrl = `${API_BASE}/api/voice/crm/save-key-highlights`;
   
